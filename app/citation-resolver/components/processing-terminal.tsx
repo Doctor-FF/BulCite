@@ -64,7 +64,7 @@ export function ProcessingTerminal({ logs }: ProcessingTerminalProps) {
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="relative h-full rounded-2xl overflow-hidden"
+      className="relative rounded-2xl overflow-hidden min-h-[200px] h-full"
       style={{
         background: "rgba(10, 10, 12, 0.95)",
         backdropFilter: "blur(24px)",

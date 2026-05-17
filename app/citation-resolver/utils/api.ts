@@ -17,22 +17,16 @@ interface SemanticScholarPaper {
   externalIds?: { DOI?: string };
 }
 
-// Tier 2: CrossRef API
+// Tier 2: CrossRef API (via proxy)
 export async function fetchCrossRef(
   cleanQuery: string,
   rawText: string
 ): Promise<CitationCandidate[]> {
-  const encoded = encodeURIComponent(cleanQuery);
-  const url = `https://api.crossref.org/works?query.bibliographic=${encoded}&filter=type:journal-article&select=DOI,title,author,issued&rows=3`;
-
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "CitationResolver/1.0 (mailto:contact@example.com)",
-    },
-  });
+  const response = await fetch(`/api/crossref?query=${encodeURIComponent(cleanQuery)}`);
 
   if (!response.ok) {
-    throw new Error(`CrossRef API error: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `CrossRef API error: ${response.status}`);
   }
 
   const data = await response.json();
@@ -56,18 +50,16 @@ export async function fetchCrossRef(
   });
 }
 
-// Tier 3: Semantic Scholar API
+// Tier 3: Semantic Scholar API (via proxy)
 export async function fetchSemanticScholar(
   cleanQuery: string,
   rawText: string
 ): Promise<CitationCandidate[]> {
-  const encoded = encodeURIComponent(cleanQuery);
-  const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encoded}&limit=3&fields=title,year,authors,externalIds`;
-
-  const response = await fetch(url);
+  const response = await fetch(`/api/semantic-scholar?query=${encodeURIComponent(cleanQuery)}`);
 
   if (!response.ok) {
-    throw new Error(`Semantic Scholar API error: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Semantic Scholar API error: ${response.status}`);
   }
 
   const data = await response.json();

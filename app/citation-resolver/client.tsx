@@ -80,16 +80,13 @@ export default function CitationResolverClient() {
       addLog("Querying CrossRef API...", "info");
       const crossRefCandidates = await fetchCrossRef(cleanQuery, rawText);
 
+      console.log("[v0] CrossRef candidates:", crossRefCandidates);
       if (crossRefCandidates.length > 0) {
         const bestScore = crossRefCandidates[0].score;
-        if (bestScore > CONFIDENCE_THRESHOLD) {
-          addLog(
-            `CrossRef match: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-            "success"
-          );
-        } else {
-          addLog(`CrossRef: Low confidence match (${(bestScore * 100).toFixed(0)}%)`, "warning");
-        }
+        addLog(
+          `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+          bestScore > 0.4 ? "success" : "warning"
+        );
 
         return {
           ...citation,
@@ -99,6 +96,7 @@ export default function CitationResolverClient() {
         };
       }
     } catch (error) {
+      console.log("[v0] CrossRef error:", error);
       addLog(`CrossRef error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
     }
 
@@ -107,16 +105,13 @@ export default function CitationResolverClient() {
       addLog("Falling back to Semantic Scholar...", "info");
       const semanticCandidates = await fetchSemanticScholar(cleanQuery, rawText);
 
+      console.log("[v0] Semantic Scholar candidates:", semanticCandidates);
       if (semanticCandidates.length > 0) {
         const bestScore = semanticCandidates[0].score;
-        if (bestScore > CONFIDENCE_THRESHOLD) {
-          addLog(
-            `Semantic Scholar match: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-            "success"
-          );
-        } else {
-          addLog(`Semantic Scholar: Low confidence match (${(bestScore * 100).toFixed(0)}%)`, "warning");
-        }
+        addLog(
+          `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+          bestScore > 0.4 ? "success" : "warning"
+        );
 
         return {
           ...citation,
@@ -126,6 +121,7 @@ export default function CitationResolverClient() {
         };
       }
     } catch (error) {
+      console.log("[v0] Semantic Scholar error:", error);
       addLog(`Semantic Scholar error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
     }
 
@@ -298,11 +294,11 @@ export default function CitationResolverClient() {
         </div>
 
         {/* Main grid - Left (Raw Citations + Terminal) | Right (Results) */}
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6 h-[calc(100vh-180px)] min-h-[500px]">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6">
           {/* Left Panel - Raw Citations (60%) + Terminal (40%) */}
-          <div className="flex flex-col gap-4 h-full">
-            {/* Raw Citations - 60% */}
-            <GlassPanel className="flex flex-col h-[60%]">
+          <div className="flex flex-col gap-4">
+            {/* Raw Citations */}
+            <GlassPanel className="flex flex-col min-h-[280px]">
               <div className="flex items-center mb-3">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Raw Citations
@@ -313,7 +309,7 @@ export default function CitationResolverClient() {
                 value={rawInput}
                 onChange={(e) => setRawInput(e.target.value)}
                 placeholder="Paste raw citations here, one per line..."
-                className="flex-1 w-full p-3 rounded-xl resize-none font-mono text-xs
+                className="flex-1 w-full p-3 rounded-xl resize-none font-mono text-xs min-h-[150px]
                   bg-white/50 dark:bg-black/20
                   border border-neutral-200/50 dark:border-white/[0.05]
                   text-neutral-800 dark:text-neutral-200
@@ -346,16 +342,16 @@ export default function CitationResolverClient() {
               </button>
             </GlassPanel>
 
-            {/* Processing Terminal - 40% */}
-            <div className="h-[40%]">
+            {/* Processing Terminal */}
+            <div className="min-h-[200px]">
               <ProcessingTerminal logs={logs} />
             </div>
           </div>
 
           {/* Right Panel - Stats + Results Dashboard */}
-          <div className="flex flex-col gap-4 h-full">
+          <div className="flex flex-col gap-4">
             {/* Stats bar */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 text-sm">
                 <span className="px-2.5 py-1.5 rounded-lg bg-neutral-200/50 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 font-medium">
                   Total: {stats.total}
@@ -384,7 +380,7 @@ export default function CitationResolverClient() {
             </div>
 
             {/* Results Dashboard */}
-            <GlassPanel className="flex-1 flex flex-col overflow-hidden">
+            <GlassPanel className="flex flex-col min-h-[400px] max-h-[calc(100vh-280px)]">
               <div className="flex items-center mb-4">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Results Dashboard
