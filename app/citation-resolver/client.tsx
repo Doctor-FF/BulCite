@@ -332,37 +332,57 @@ export default function CitationResolverClient() {
 
   const stats = calculateStats();
 
-  // Get list of unresolved citation IDs
-  const unresolvedIds = citations
-    .filter((c) => c.selectedCandidateIndex === null && c.status !== "processing" && c.status !== "pending")
-    .map((c) => c.id);
+  // Navigate to next/previous unresolved using DOM traversal
+  const jumpToUnresolved = (direction: "next" | "prev") => {
+    const nodes = Array.from(document.querySelectorAll('div[data-unresolved="true"]'));
+    
+    if (nodes.length === 0) {
+      addLog("All citations are resolved.", "success");
+      return;
+    }
 
-  // Navigate to next/previous unresolved
-  const navigateUnresolved = (direction: "next" | "prev") => {
-    if (unresolvedIds.length === 0) return;
+    const viewportCenter = window.innerHeight / 2;
+    let targetNode: Element | null = null;
 
-    const currentIndex = highlightedCitationId 
-      ? unresolvedIds.indexOf(highlightedCitationId) 
-      : -1;
-
-    let targetIndex: number;
     if (direction === "next") {
-      targetIndex = currentIndex < unresolvedIds.length - 1 ? currentIndex + 1 : 0;
+      // Find first node strictly below viewport center
+      for (const node of nodes) {
+        const rect = node.getBoundingClientRect();
+        if (rect.top > viewportCenter) {
+          targetNode = node;
+          break;
+        }
+      }
+      // If no node found below, wrap to first
+      if (!targetNode) {
+        targetNode = nodes[0];
+      }
     } else {
-      targetIndex = currentIndex > 0 ? currentIndex - 1 : unresolvedIds.length - 1;
+      // Find last node strictly above viewport center
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const rect = nodes[i].getBoundingClientRect();
+        if (rect.bottom < viewportCenter) {
+          targetNode = nodes[i];
+          break;
+        }
+      }
+      // If no node found above, wrap to last
+      if (!targetNode) {
+        targetNode = nodes[nodes.length - 1];
+      }
     }
 
-    const targetId = unresolvedIds[targetIndex];
-    setHighlightedCitationId(targetId);
-
-    // Scroll to element
-    const element = document.getElementById(`citation-${targetId}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (targetNode) {
+      // Extract citation ID from the element's id attribute
+      const citationId = targetNode.id.replace("citation-", "");
+      
+      // Scroll to element
+      targetNode.scrollIntoView({ behavior: "smooth", block: "center" });
+      
+      // Trigger glow animation
+      setHighlightedCitationId(citationId);
+      setTimeout(() => setHighlightedCitationId(null), 400);
     }
-
-    // Clear highlight after animation
-    setTimeout(() => setHighlightedCitationId(null), 500);
   };
 
   return (
@@ -545,24 +565,24 @@ export default function CitationResolverClient() {
                   Unresolved: {stats.unresolved}
                 </span>
                 {/* Navigation buttons for unresolved */}
-                {unresolvedIds.length > 0 && (
-                  <div className="flex items-center gap-1 ml-2">
-                    <button
-                      onClick={() => navigateUnresolved("prev")}
-                      className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors"
-                      title="Previous unresolved"
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => navigateUnresolved("next")}
-                      className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors"
-                      title="Next unresolved"
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    onClick={() => jumpToUnresolved("prev")}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors text-xs font-medium"
+                    title="Previous unresolved"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => jumpToUnresolved("next")}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors text-xs font-medium"
+                    title="Next unresolved"
+                  >
+                    Next
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               <button
                 onClick={handleExport}
