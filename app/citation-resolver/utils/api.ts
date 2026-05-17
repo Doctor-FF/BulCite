@@ -82,21 +82,17 @@ export async function fetchSemanticScholar(
   });
 }
 
-// Fetch RIS format from DOI
+// Fetch RIS format from DOI (via proxy to avoid CORS)
 export async function fetchRIS(doi: string): Promise<string | null> {
   try {
-    const response = await fetch(`https://doi.org/${doi}`, {
-      headers: {
-        Accept: "application/x-research-info-systems",
-      },
-      redirect: "follow",
-    });
+    const response = await fetch(`/api/ris?doi=${encodeURIComponent(doi)}`);
 
     if (!response.ok) {
       return null;
     }
 
-    return await response.text();
+    const data = await response.json();
+    return data.ris || null;
   } catch {
     return null;
   }

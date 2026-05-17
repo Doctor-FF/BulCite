@@ -20,6 +20,7 @@ export default function CitationResolverClient() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   const addLog = useCallback(
     (message: string, type: LogEntry["type"] = "info") => {
@@ -58,9 +59,10 @@ export default function CitationResolverClient() {
 
     if (directDOI) {
       addLog(`Found embedded DOI: ${directDOI}`, "success");
+      // Auto-select if score >= 40% (1.0 = 100% for direct DOI)
       return {
         ...citation,
-        status: "unresolved",
+        status: "resolved",
         candidates: [
           {
             title: rawText,
@@ -71,7 +73,7 @@ export default function CitationResolverClient() {
             source: "regex",
           },
         ],
-        selectedCandidateIndex: null,
+        selectedCandidateIndex: 0,
       };
     }
 
@@ -80,23 +82,23 @@ export default function CitationResolverClient() {
       addLog("Querying CrossRef API...", "info");
       const crossRefCandidates = await fetchCrossRef(cleanQuery, rawText);
 
-      console.log("[v0] CrossRef candidates:", crossRefCandidates);
       if (crossRefCandidates.length > 0) {
         const bestScore = crossRefCandidates[0].score;
         addLog(
           `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-          bestScore > 0.4 ? "success" : "warning"
+          bestScore >= 0.4 ? "success" : "warning"
         );
 
+        // Auto-select first candidate if score >= 40%, otherwise unresolved
+        const autoSelect = bestScore >= 0.4 ? 0 : null;
         return {
           ...citation,
-          status: "unresolved",
+          status: autoSelect !== null ? "resolved" : "unresolved",
           candidates: crossRefCandidates,
-          selectedCandidateIndex: null,
+          selectedCandidateIndex: autoSelect,
         };
       }
     } catch (error) {
-      console.log("[v0] CrossRef error:", error);
       addLog(`CrossRef error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
     }
 
@@ -105,23 +107,23 @@ export default function CitationResolverClient() {
       addLog("Falling back to Semantic Scholar...", "info");
       const semanticCandidates = await fetchSemanticScholar(cleanQuery, rawText);
 
-      console.log("[v0] Semantic Scholar candidates:", semanticCandidates);
       if (semanticCandidates.length > 0) {
         const bestScore = semanticCandidates[0].score;
         addLog(
           `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-          bestScore > 0.4 ? "success" : "warning"
+          bestScore >= 0.4 ? "success" : "warning"
         );
 
+        // Auto-select first candidate if score >= 40%, otherwise unresolved
+        const autoSelect = bestScore >= 0.4 ? 0 : null;
         return {
           ...citation,
-          status: "unresolved",
+          status: autoSelect !== null ? "resolved" : "unresolved",
           candidates: semanticCandidates,
-          selectedCandidateIndex: null,
+          selectedCandidateIndex: autoSelect,
         };
       }
     } catch (error) {
-      console.log("[v0] Semantic Scholar error:", error);
       addLog(`Semantic Scholar error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
     }
 
@@ -147,6 +149,7 @@ export default function CitationResolverClient() {
 
     setIsProcessing(true);
     setLogs([]);
+    setProgress({ current: 0, total: lines.length });
     addLog(`Starting extraction for ${lines.length} citation(s)...`, "info");
 
     // Initialize citations - start with null (unresolved) selection
@@ -178,6 +181,9 @@ export default function CitationResolverClient() {
       setCitations((prev) =>
         prev.map((c) => (c.id === citation.id ? processed : c))
       );
+
+      // Update progress
+      setProgress({ current: i + 1, total: initialCitations.length });
 
       // Delay to avoid rate limits (skip on last)
       if (i < initialCitations.length - 1) {
@@ -295,10 +301,10 @@ export default function CitationResolverClient() {
 
         {/* Main grid - Left (Raw Citations + Terminal) | Right (Results) */}
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6">
-          {/* Left Panel - Raw Citations (60%) + Terminal (40%) */}
+          {/* Left Panel - Raw Citations + Terminal - Fixed heights with scrolling */}
           <div className="flex flex-col gap-4">
-            {/* Raw Citations */}
-            <GlassPanel className="flex flex-col min-h-[280px]">
+            {/* Raw Citations - Fixed height with internal scroll */}
+            <GlassPanel className="flex flex-col h-[280px]">
               <div className="flex items-center mb-3">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Raw Citations
@@ -309,7 +315,7 @@ export default function CitationResolverClient() {
                 value={rawInput}
                 onChange={(e) => setRawInput(e.target.value)}
                 placeholder="Paste raw citations here, one per line..."
-                className="flex-1 w-full p-3 rounded-xl resize-none font-mono text-xs min-h-[150px]
+                className="flex-1 w-full p-3 rounded-xl resize-none font-mono text-xs overflow-y-auto
                   bg-white/50 dark:bg-black/20
                   border border-neutral-200/50 dark:border-white/[0.05]
                   text-neutral-800 dark:text-neutral-200
@@ -342,9 +348,9 @@ export default function CitationResolverClient() {
               </button>
             </GlassPanel>
 
-            {/* Processing Terminal */}
-            <div className="min-h-[200px]">
-              <ProcessingTerminal logs={logs} />
+            {/* Processing Terminal - Fixed height with internal scroll */}
+            <div className="h-[200px]">
+              <ProcessingTerminal logs={logs} progress={progress} />
             </div>
           </div>
 
@@ -379,8 +385,8 @@ export default function CitationResolverClient() {
               </button>
             </div>
 
-            {/* Results Dashboard */}
-            <GlassPanel className="flex flex-col min-h-[400px] max-h-[calc(100vh-280px)]">
+            {/* Results Dashboard - Min height with ability to expand up to 2X, internal scroll */}
+            <GlassPanel className="flex flex-col min-h-[400px] max-h-[800px]">
               <div className="flex items-center mb-4">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Results Dashboard
