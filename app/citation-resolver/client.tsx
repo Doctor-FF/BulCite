@@ -336,18 +336,25 @@ export default function CitationResolverClient() {
   const jumpToUnresolved = (direction: "next" | "prev") => {
     const nodes = Array.from(document.querySelectorAll('div[data-unresolved="true"]'));
     
+    console.log("[v0] jumpToUnresolved called:", direction);
+    console.log("[v0] Found unresolved nodes:", nodes.length);
+    
     if (nodes.length === 0) {
+      console.log("[v0] No unresolved nodes found");
       addLog("All citations are resolved.", "success");
       return;
     }
 
     const viewportCenter = window.innerHeight / 2;
+    console.log("[v0] Viewport center:", viewportCenter);
+    
     let targetNode: Element | null = null;
 
     if (direction === "next") {
       // Find first node strictly below viewport center
       for (const node of nodes) {
         const rect = node.getBoundingClientRect();
+        console.log("[v0] Node rect.top:", rect.top, "id:", node.id);
         if (rect.top > viewportCenter) {
           targetNode = node;
           break;
@@ -355,12 +362,14 @@ export default function CitationResolverClient() {
       }
       // If no node found below, wrap to first
       if (!targetNode) {
+        console.log("[v0] Wrapping to first node");
         targetNode = nodes[0];
       }
     } else {
       // Find last node strictly above viewport center
       for (let i = nodes.length - 1; i >= 0; i--) {
         const rect = nodes[i].getBoundingClientRect();
+        console.log("[v0] Node rect.bottom:", rect.bottom, "id:", nodes[i].id);
         if (rect.bottom < viewportCenter) {
           targetNode = nodes[i];
           break;
@@ -368,6 +377,7 @@ export default function CitationResolverClient() {
       }
       // If no node found above, wrap to last
       if (!targetNode) {
+        console.log("[v0] Wrapping to last node");
         targetNode = nodes[nodes.length - 1];
       }
     }
@@ -375,6 +385,7 @@ export default function CitationResolverClient() {
     if (targetNode) {
       // Extract citation ID from the element's id attribute
       const citationId = targetNode.id.replace("citation-", "");
+      console.log("[v0] Target node found, citationId:", citationId);
       
       // Scroll to element
       targetNode.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -382,6 +393,8 @@ export default function CitationResolverClient() {
       // Trigger glow animation
       setHighlightedCitationId(citationId);
       setTimeout(() => setHighlightedCitationId(null), 400);
+    } else {
+      console.log("[v0] No target node found");
     }
   };
 
@@ -564,23 +577,21 @@ export default function CitationResolverClient() {
                 <span className="px-2.5 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">
                   Unresolved: {stats.unresolved}
                 </span>
-                {/* Navigation buttons for unresolved */}
+                {/* Navigation buttons for unresolved - arrows only */}
                 <div className="flex items-center gap-1 ml-2">
                   <button
                     onClick={() => jumpToUnresolved("prev")}
-                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors text-xs font-medium"
+                    className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors"
                     title="Previous unresolved"
                   >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                    Prev
+                    <ChevronUp className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => jumpToUnresolved("next")}
-                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors text-xs font-medium"
+                    className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors"
                     title="Next unresolved"
                   >
-                    Next
-                    <ChevronDown className="h-3.5 w-3.5" />
+                    <ChevronDown className="h-4 w-4" />
                   </button>
                 </div>
               </div>
