@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { Play, Download, Beaker, Users } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
@@ -15,6 +16,8 @@ function generateId(): string {
 }
 
 export default function CitationResolverClient() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [rawInput, setRawInput] = useState("");
   const [citations, setCitations] = useState<ProcessedCitation[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -23,6 +26,27 @@ export default function CitationResolverClient() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [activeUsers, setActiveUsers] = useState(0);
   const [threshold, setThreshold] = useState(40); // Default 40%
+  const [orbColors, setOrbColors] = useState<{ light: string; dark: string }[]>([]);
+
+  // Generate random gradient colors on mount
+  useEffect(() => {
+    const colorOptions = [
+      { light: "rgba(147, 197, 253, 0.4)", dark: "rgba(30, 58, 138, 0.3)" }, // blue
+      { light: "rgba(253, 164, 175, 0.4)", dark: "rgba(136, 19, 55, 0.3)" }, // rose
+      { light: "rgba(110, 231, 183, 0.4)", dark: "rgba(6, 78, 59, 0.3)" }, // emerald
+      { light: "rgba(196, 181, 253, 0.4)", dark: "rgba(76, 29, 149, 0.3)" }, // violet
+      { light: "rgba(252, 211, 77, 0.4)", dark: "rgba(146, 64, 14, 0.3)" }, // amber
+      { light: "rgba(125, 211, 252, 0.4)", dark: "rgba(12, 74, 110, 0.3)" }, // sky
+      { light: "rgba(190, 242, 100, 0.4)", dark: "rgba(63, 98, 18, 0.3)" }, // lime
+      { light: "rgba(240, 171, 252, 0.4)", dark: "rgba(112, 26, 117, 0.3)" }, // fuchsia
+      { light: "rgba(253, 186, 116, 0.4)", dark: "rgba(124, 45, 18, 0.3)" }, // orange
+      { light: "rgba(94, 234, 212, 0.4)", dark: "rgba(19, 78, 74, 0.3)" }, // teal
+    ];
+    
+    // Shuffle and pick 4 random colors
+    const shuffled = [...colorOptions].sort(() => Math.random() - 0.5);
+    setOrbColors(shuffled.slice(0, 4));
+  }, []);
 
   // Simulate active users counter (in production, this would connect to a real-time service)
   useEffect(() => {
@@ -284,12 +308,28 @@ export default function CitationResolverClient() {
       {/* Gradient background */}
       <div className="fixed inset-0 bg-gradient-to-br from-slate-100 via-neutral-50 to-stone-100 dark:from-slate-950 dark:via-neutral-950 dark:to-zinc-900" />
       
-      {/* Animated blurred gradient orbs */}
+      {/* Animated blurred gradient orbs with random colors */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute w-[700px] h-[700px] rounded-full bg-gradient-to-br from-blue-200/40 to-cyan-200/30 dark:from-blue-900/30 dark:to-cyan-900/20 blur-[120px] -top-48 -left-48 animate-float1" />
-        <div className="absolute w-[600px] h-[600px] rounded-full bg-gradient-to-br from-rose-200/30 to-orange-200/20 dark:from-rose-900/20 dark:to-orange-900/15 blur-[120px] top-1/2 -right-32 animate-float2" />
-        <div className="absolute w-[500px] h-[500px] rounded-full bg-gradient-to-br from-emerald-200/30 to-teal-200/20 dark:from-emerald-900/20 dark:to-teal-900/15 blur-[120px] -bottom-32 left-1/3 animate-float3" />
-        <div className="absolute w-[550px] h-[550px] rounded-full bg-gradient-to-br from-violet-200/25 to-indigo-200/20 dark:from-violet-900/15 dark:to-indigo-900/10 blur-[120px] top-1/4 left-1/4 animate-float2" />
+        {orbColors.length >= 4 && (
+          <>
+            <div 
+              className="absolute w-[700px] h-[700px] rounded-full blur-[120px] -top-48 -left-48 animate-float1"
+              style={{ background: `radial-gradient(circle, ${isDark ? orbColors[0].dark : orbColors[0].light}, transparent 70%)` }}
+            />
+            <div 
+              className="absolute w-[600px] h-[600px] rounded-full blur-[120px] top-1/2 -right-32 animate-float2"
+              style={{ background: `radial-gradient(circle, ${isDark ? orbColors[1].dark : orbColors[1].light}, transparent 70%)` }}
+            />
+            <div 
+              className="absolute w-[500px] h-[500px] rounded-full blur-[120px] -bottom-32 left-1/3 animate-float3"
+              style={{ background: `radial-gradient(circle, ${isDark ? orbColors[2].dark : orbColors[2].light}, transparent 70%)` }}
+            />
+            <div 
+              className="absolute w-[550px] h-[550px] rounded-full blur-[120px] top-1/4 left-1/4 animate-float2"
+              style={{ background: `radial-gradient(circle, ${isDark ? orbColors[3].dark : orbColors[3].light}, transparent 70%)` }}
+            />
+          </>
+        )}
       </div>
 
       {/* Noise texture overlay */}
@@ -312,7 +352,7 @@ export default function CitationResolverClient() {
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
-                    Citation Resolver
+                    BulCite
                   </h1>
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
                     <Users className="h-3.5 w-3.5" />

@@ -67,30 +67,31 @@ export function ProcessingTerminal({ logs, progress }: ProcessingTerminalProps) 
       onMouseLeave={handleMouseLeave}
       className="relative rounded-2xl overflow-hidden h-full flex flex-col"
       style={{
-        background: "rgba(10, 10, 12, 0.95)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        border: "1px solid rgba(255, 255, 255, 0.06)",
+        background: "linear-gradient(180deg, rgba(15, 15, 18, 0.98) 0%, rgba(10, 10, 12, 0.95) 100%)",
+        backdropFilter: "blur(20px) saturate(150%)",
+        WebkitBackdropFilter: "blur(20px) saturate(150%)",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
         boxShadow: shine.active
-          ? "0 4px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.06)"
-          : "0 4px 24px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.03)",
-        transition: "box-shadow 0.5s ease, border-color 0.5s ease",
-        borderColor: shine.active
-          ? "rgba(255, 255, 255, 0.12)"
-          : "rgba(255, 255, 255, 0.06)",
+          ? "0 8px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)"
+          : "0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03)",
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        transform: shine.active ? "translateY(-1px)" : "translateY(0)",
       }}
     >
-      {/* Border-only shine */}
+      {/* Glass refraction highlight at top */}
+      <div 
+        className="pointer-events-none absolute inset-x-0 top-0 h-px z-10"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent)",
+        }}
+      />
+
+      {/* Mouse-following shine effect */}
       <div
-        className="pointer-events-none absolute inset-[-1px] z-0 rounded-2xl transition-opacity duration-700"
+        className="pointer-events-none absolute inset-[-1px] z-0 rounded-2xl transition-opacity duration-500"
         style={{
           opacity: shine.active ? 1 : 0,
-          background: `radial-gradient(500px circle at ${shine.x}px ${shine.y}px, rgba(255, 255, 255, 0.10), transparent 65%)`,
-          mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
-          maskComposite: "exclude",
-          WebkitMaskComposite: "xor",
-          padding: "1.5px",
-          borderRadius: "1rem",
+          background: `radial-gradient(500px circle at ${shine.x}px ${shine.y}px, rgba(255, 255, 255, 0.06), transparent 50%)`,
         }}
       />
 
