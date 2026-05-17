@@ -386,14 +386,14 @@ export default function CitationResolverClient() {
             </div>
 
             {/* Results Dashboard - Min height with ability to expand up to 2X, internal scroll */}
-            <GlassPanel className="flex flex-col min-h-[400px] max-h-[800px]">
-              <div className="flex items-center mb-4">
+            <GlassPanel className="flex flex-col min-h-[400px] max-h-[800px] overflow-hidden">
+              <div className="flex items-center mb-4 shrink-0">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Results Dashboard
                 </h2>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 <ResultsList
                   citations={citations}
                   onSelectCandidate={handleSelectCandidate}
