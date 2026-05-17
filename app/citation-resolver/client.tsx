@@ -22,6 +22,7 @@ export default function CitationResolverClient() {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [activeUsers, setActiveUsers] = useState(0);
+  const [threshold, setThreshold] = useState(40); // Default 40%
 
   // Simulate active users counter (in production, this would connect to a real-time service)
   useEffect(() => {
@@ -101,13 +102,14 @@ export default function CitationResolverClient() {
 
       if (crossRefCandidates.length > 0) {
         const bestScore = crossRefCandidates[0].score;
+        const thresholdDecimal = threshold / 100;
         addLog(
           `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-          bestScore >= 0.4 ? "success" : "warning"
+          bestScore >= thresholdDecimal ? "success" : "warning"
         );
 
-        // Auto-select first candidate if score >= 40%, otherwise unresolved
-        const autoSelect = bestScore >= 0.4 ? 0 : null;
+        // Auto-select first candidate if score >= threshold, otherwise unresolved
+        const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
         return {
           ...citation,
           status: autoSelect !== null ? "resolved" : "unresolved",
@@ -126,13 +128,14 @@ export default function CitationResolverClient() {
 
       if (semanticCandidates.length > 0) {
         const bestScore = semanticCandidates[0].score;
+        const thresholdDecimal = threshold / 100;
         addLog(
           `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-          bestScore >= 0.4 ? "success" : "warning"
+          bestScore >= thresholdDecimal ? "success" : "warning"
         );
 
-        // Auto-select first candidate if score >= 40%, otherwise unresolved
-        const autoSelect = bestScore >= 0.4 ? 0 : null;
+        // Auto-select first candidate if score >= threshold, otherwise unresolved
+        const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
         return {
           ...citation,
           status: autoSelect !== null ? "resolved" : "unresolved",
@@ -277,13 +280,16 @@ export default function CitationResolverClient() {
   const stats = calculateStats();
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#f5f5f7] dark:bg-[#0a0a0c] transition-colors duration-500">
-      {/* Animated background orbs */}
+    <div className="min-h-screen relative overflow-hidden transition-colors duration-500">
+      {/* Gradient background */}
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-100 via-neutral-50 to-stone-100 dark:from-slate-950 dark:via-neutral-950 dark:to-zinc-900" />
+      
+      {/* Animated blurred gradient orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute w-[600px] h-[600px] rounded-full bg-neutral-300/30 dark:bg-neutral-700/20 blur-[100px] -top-48 -left-48 animate-float1" />
-        <div className="absolute w-[500px] h-[500px] rounded-full bg-neutral-400/20 dark:bg-neutral-600/15 blur-[100px] top-1/2 -right-32 animate-float2" />
-        <div className="absolute w-[400px] h-[400px] rounded-full bg-neutral-300/25 dark:bg-neutral-700/20 blur-[100px] -bottom-32 left-1/3 animate-float3" />
-        <div className="absolute w-[450px] h-[450px] rounded-full bg-neutral-400/15 dark:bg-neutral-500/10 blur-[100px] top-1/4 left-1/4 animate-float2" />
+        <div className="absolute w-[700px] h-[700px] rounded-full bg-gradient-to-br from-blue-200/40 to-cyan-200/30 dark:from-blue-900/30 dark:to-cyan-900/20 blur-[120px] -top-48 -left-48 animate-float1" />
+        <div className="absolute w-[600px] h-[600px] rounded-full bg-gradient-to-br from-rose-200/30 to-orange-200/20 dark:from-rose-900/20 dark:to-orange-900/15 blur-[120px] top-1/2 -right-32 animate-float2" />
+        <div className="absolute w-[500px] h-[500px] rounded-full bg-gradient-to-br from-emerald-200/30 to-teal-200/20 dark:from-emerald-900/20 dark:to-teal-900/15 blur-[120px] -bottom-32 left-1/3 animate-float3" />
+        <div className="absolute w-[550px] h-[550px] rounded-full bg-gradient-to-br from-violet-200/25 to-indigo-200/20 dark:from-violet-900/15 dark:to-indigo-900/10 blur-[120px] top-1/4 left-1/4 animate-float2" />
       </div>
 
       {/* Noise texture overlay */}
@@ -327,7 +333,7 @@ export default function CitationResolverClient() {
           {/* Left Panel - Raw Citations + Terminal - Fixed heights with scrolling */}
           <div className="flex flex-col gap-4">
             {/* Raw Citations - Fixed height with internal scroll */}
-            <GlassPanel className="flex flex-col h-[280px]">
+            <GlassPanel className="flex flex-col h-[340px]">
               <div className="flex items-center mb-3">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Raw Citations
@@ -346,6 +352,51 @@ export default function CitationResolverClient() {
                   focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-white/20
                   transition-all duration-200"
               />
+
+              {/* Threshold Slider */}
+              <div className="mt-3 px-1">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                    Auto-resolve threshold
+                  </label>
+                  <span className="text-xs font-bold text-neutral-800 dark:text-white px-2 py-0.5 rounded-md bg-neutral-200/70 dark:bg-white/10">
+                    {threshold}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="10"
+                  max="90"
+                  step="5"
+                  value={threshold}
+                  onChange={(e) => setThreshold(Number(e.target.value))}
+                  disabled={isProcessing}
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer
+                    bg-neutral-300 dark:bg-neutral-700
+                    [&::-webkit-slider-thumb]:appearance-none
+                    [&::-webkit-slider-thumb]:w-4
+                    [&::-webkit-slider-thumb]:h-4
+                    [&::-webkit-slider-thumb]:rounded-full
+                    [&::-webkit-slider-thumb]:bg-neutral-800
+                    [&::-webkit-slider-thumb]:dark:bg-white
+                    [&::-webkit-slider-thumb]:shadow-md
+                    [&::-webkit-slider-thumb]:cursor-pointer
+                    [&::-webkit-slider-thumb]:transition-transform
+                    [&::-webkit-slider-thumb]:hover:scale-110
+                    [&::-moz-range-thumb]:w-4
+                    [&::-moz-range-thumb]:h-4
+                    [&::-moz-range-thumb]:rounded-full
+                    [&::-moz-range-thumb]:bg-neutral-800
+                    [&::-moz-range-thumb]:dark:bg-white
+                    [&::-moz-range-thumb]:border-0
+                    [&::-moz-range-thumb]:cursor-pointer
+                    disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
+                  <span>10%</span>
+                  <span>90%</span>
+                </div>
+              </div>
 
               <button
                 onClick={handleExecute}
