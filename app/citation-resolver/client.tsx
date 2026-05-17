@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
-import { Play, Download, Beaker, Users } from "lucide-react";
+import { Play, Download, Beaker, Users, ChevronUp, ChevronDown } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
 import { fetchCrossRef, fetchSemanticScholar, fetchRIS, generateUnresolvedRIS } from "./utils/api";
@@ -27,6 +27,8 @@ export default function CitationResolverClient() {
   const [activeUsers, setActiveUsers] = useState(0);
   const [threshold, setThreshold] = useState(40); // Default 40%
   const [orbColors, setOrbColors] = useState<{ light: string; dark: string }[]>([]);
+  const [highlightedCitationId, setHighlightedCitationId] = useState<string | null>(null);
+  const resultsContainerRef = useRef<HTMLDivElement>(null);
 
   // Generate random gradient colors on mount
   useEffect(() => {
@@ -63,6 +65,33 @@ export default function CitationResolverClient() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Re-evaluate default selections when threshold changes (only for non-user-resolved items)
+  useEffect(() => {
+    if (citations.length === 0) return;
+    
+    const thresholdDecimal = threshold / 100;
+    setCitations((prev) =>
+      prev.map((c) => {
+        // Skip if user has manually resolved or if still processing
+        if (c.resolvedByUser || c.status === "processing" || c.status === "pending") {
+          return c;
+        }
+        
+        // Re-evaluate based on threshold
+        if (c.candidates.length > 0) {
+          const bestScore = c.candidates[0].score;
+          const shouldAutoSelect = bestScore >= thresholdDecimal;
+          return {
+            ...c,
+            selectedCandidateIndex: shouldAutoSelect ? 0 : null,
+            status: shouldAutoSelect ? "resolved" : "unresolved",
+          };
+        }
+        return c;
+      })
+    );
+  }, [threshold]);
 
   const addLog = useCallback(
     (message: string, type: LogEntry["type"] = "info") => {
@@ -303,6 +332,72 @@ export default function CitationResolverClient() {
 
   const stats = calculateStats();
 
+  // Navigate to next/previous unresolved using DOM traversal
+  const jumpToUnresolved = (direction: "next" | "prev") => {
+    const nodes = Array.from(document.querySelectorAll('div[data-unresolved="true"]'));
+    
+    console.log("[v0] jumpToUnresolved called:", direction);
+    console.log("[v0] Found unresolved nodes:", nodes.length);
+    
+    if (nodes.length === 0) {
+      console.log("[v0] No unresolved nodes found");
+      addLog("All citations are resolved.", "success");
+      return;
+    }
+
+    const viewportCenter = window.innerHeight / 2;
+    console.log("[v0] Viewport center:", viewportCenter);
+    
+    let targetNode: Element | null = null;
+
+    if (direction === "next") {
+      // Find first node strictly below viewport center
+      for (const node of nodes) {
+        const rect = node.getBoundingClientRect();
+        console.log("[v0] Node rect.top:", rect.top, "id:", node.id);
+        if (rect.top > viewportCenter) {
+          targetNode = node;
+          break;
+        }
+      }
+      // If no node found below, wrap to first
+      if (!targetNode) {
+        console.log("[v0] Wrapping to first node");
+        targetNode = nodes[0];
+      }
+    } else {
+      // Find last node strictly above viewport center
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const rect = nodes[i].getBoundingClientRect();
+        console.log("[v0] Node rect.bottom:", rect.bottom, "id:", nodes[i].id);
+        if (rect.bottom < viewportCenter) {
+          targetNode = nodes[i];
+          break;
+        }
+      }
+      // If no node found above, wrap to last
+      if (!targetNode) {
+        console.log("[v0] Wrapping to last node");
+        targetNode = nodes[nodes.length - 1];
+      }
+    }
+
+    if (targetNode) {
+      // Extract citation ID from the element's id attribute
+      const citationId = targetNode.id.replace("citation-", "");
+      console.log("[v0] Target node found, citationId:", citationId);
+      
+      // Scroll to element
+      targetNode.scrollIntoView({ behavior: "smooth", block: "center" });
+      
+      // Trigger glow animation
+      setHighlightedCitationId(citationId);
+      setTimeout(() => setHighlightedCitationId(null), 400);
+    } else {
+      console.log("[v0] No target node found");
+    }
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden transition-colors duration-500">
       {/* Gradient background */}
@@ -482,6 +577,23 @@ export default function CitationResolverClient() {
                 <span className="px-2.5 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">
                   Unresolved: {stats.unresolved}
                 </span>
+                {/* Navigation buttons for unresolved - arrows only */}
+                <div className="flex items-center gap-1 ml-2">
+                  <button
+                    onClick={() => jumpToUnresolved("prev")}
+                    className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors"
+                    title="Previous unresolved"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => jumpToUnresolved("next")}
+                    className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-500/30 transition-colors"
+                    title="Next unresolved"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <button
                 onClick={handleExport}
@@ -507,10 +619,12 @@ export default function CitationResolverClient() {
                 </h2>
               </div>
 
-              <div className="flex-1 overflow-y-auto min-h-0">
+              <div ref={resultsContainerRef} className="flex-1 overflow-y-auto min-h-0">
                 <ResultsList
                   citations={citations}
                   onSelectCandidate={handleSelectCandidate}
+                  highlightedId={highlightedCitationId}
+                  threshold={threshold}
                 />
               </div>
             </GlassPanel>

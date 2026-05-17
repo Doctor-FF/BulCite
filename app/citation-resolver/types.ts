@@ -7,6 +7,7 @@ export interface CitationCandidate {
   authors: string[];
   score: number;
   source: "regex" | "crossref" | "semantic-scholar";
+  journal?: string | null;
 }
 
 export interface ProcessedCitation {

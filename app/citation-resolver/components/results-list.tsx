@@ -1,14 +1,17 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { CheckCircle2, XCircle, ExternalLink, AlertCircle } from "lucide-react";
 import type { ProcessedCitation } from "../types";
 
 interface ResultsListProps {
   citations: ProcessedCitation[];
   onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
+  highlightedId?: string | null;
+  threshold: number;
 }
 
-export function ResultsList({ citations, onSelectCandidate }: ResultsListProps) {
+export function ResultsList({ citations, onSelectCandidate, highlightedId, threshold }: ResultsListProps) {
   if (citations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-neutral-500 dark:text-neutral-400">
@@ -27,6 +30,8 @@ export function ResultsList({ citations, onSelectCandidate }: ResultsListProps) 
           citation={citation}
           index={index + 1}
           onSelectCandidate={onSelectCandidate}
+          isHighlighted={highlightedId === citation.id}
+          threshold={threshold}
         />
       ))}
     </div>
@@ -37,9 +42,22 @@ interface ResultRowProps {
   citation: ProcessedCitation;
   index: number;
   onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
+  isHighlighted: boolean;
+  threshold: number;
 }
 
-function ResultRow({ citation, index, onSelectCandidate }: ResultRowProps) {
+function ResultRow({ citation, index, onSelectCandidate, isHighlighted, threshold }: ResultRowProps) {
+  const [glowing, setGlowing] = useState(false);
+  
+  // Handle glow animation when highlighted
+  useEffect(() => {
+    if (isHighlighted) {
+      setGlowing(true);
+      const timer = setTimeout(() => setGlowing(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [isHighlighted]);
+
   const selectedCandidate = citation.selectedCandidateIndex !== null 
     ? citation.candidates[citation.selectedCandidateIndex] 
     : null;
@@ -48,16 +66,19 @@ function ResultRow({ citation, index, onSelectCandidate }: ResultRowProps) {
   const isUnresolvedSelected = citation.selectedCandidateIndex === null;
 
   const candidateLabels = ["A", "B", "C"];
+  const thresholdDecimal = threshold / 100;
 
   return (
     <div
+      id={`citation-${citation.id}`}
+      data-unresolved={isUnresolvedSelected ? "true" : "false"}
       className={`
         p-4 rounded-xl transition-all duration-300 
         ${isResolved 
           ? "bg-emerald-50/50 dark:bg-emerald-500/[0.05] border border-emerald-200/50 dark:border-emerald-500/20" 
           : "bg-amber-50/30 dark:bg-amber-500/[0.03] border border-amber-200/30 dark:border-amber-500/10"
         }
-        hover:shadow-md hover:shadow-neutral-200/50 dark:hover:shadow-black/20
+        ${glowing ? "ring-2 ring-amber-400 dark:ring-amber-500 ring-opacity-75" : ""}
       `}
     >
       {/* Index badge and raw citation */}
@@ -101,6 +122,12 @@ function ResultRow({ citation, index, onSelectCandidate }: ResultRowProps) {
               {selectedCandidate.doi}
             </a>
           )}
+          {/* Journal and Year metadata */}
+          {(selectedCandidate.journal || selectedCandidate.year) && (
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">
+              {selectedCandidate.journal}{selectedCandidate.journal && selectedCandidate.year ? " • " : ""}{selectedCandidate.year}
+            </p>
+          )}
           <div className="text-xs text-neutral-500 dark:text-neutral-400">
             Score: {(selectedCandidate.score * 100).toFixed(0)}% via {selectedCandidate.source}
           </div>
@@ -121,7 +148,7 @@ function ResultRow({ citation, index, onSelectCandidate }: ResultRowProps) {
 
       {/* Selection buttons below title - UNRESOLVED, A, B, C */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* UNRESOLVED button with improved styling */}
+        {/* UNRESOLVED button */}
         <button
           onClick={() => onSelectCandidate(citation.id, null)}
           disabled={isProcessing}
@@ -138,11 +165,11 @@ function ResultRow({ citation, index, onSelectCandidate }: ResultRowProps) {
           UNRESOLVED
         </button>
 
-        {/* A, B, C candidate buttons with improved colors */}
+        {/* A, B, C candidate buttons - already sorted by score descending */}
         {citation.candidates.slice(0, 3).map((candidate, idx) => {
           const isSelected = citation.selectedCandidateIndex === idx;
           const percentage = (candidate.score * 100).toFixed(0);
-          const isHighConfidence = candidate.score >= 0.4;
+          const isHighConfidence = candidate.score >= thresholdDecimal;
 
           return (
             <button
@@ -160,7 +187,7 @@ function ResultRow({ citation, index, onSelectCandidate }: ResultRowProps) {
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
-              title={candidate.title}
+              title={`${candidate.title}${candidate.journal ? ` • ${candidate.journal}` : ""}${candidate.year ? ` • ${candidate.year}` : ""}`}
             >
               {candidateLabels[idx]} {percentage}%
             </button>

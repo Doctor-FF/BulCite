@@ -8,6 +8,7 @@ interface CrossRefWork {
   title?: string[];
   author?: Array<{ given?: string; family?: string }>;
   issued?: { "date-parts"?: number[][] };
+  "container-title"?: string[];
 }
 
 interface SemanticScholarPaper {
@@ -15,6 +16,7 @@ interface SemanticScholarPaper {
   year?: number;
   authors?: Array<{ name: string }>;
   externalIds?: { DOI?: string };
+  venue?: string;
 }
 
 // Tier 2: CrossRef API (via proxy)
@@ -32,12 +34,13 @@ export async function fetchCrossRef(
   const data = await response.json();
   const items: CrossRefWork[] = data.message?.items || [];
 
-  return items.map((item) => {
+  const candidates = items.map((item) => {
     const title = item.title?.[0] || "";
     const authors =
       item.author?.map((a) => `${a.given || ""} ${a.family || ""}`.trim()) ||
       [];
     const year = item.issued?.["date-parts"]?.[0]?.[0] || null;
+    const journal = item["container-title"]?.[0] || null;
 
     return {
       title,
@@ -46,8 +49,12 @@ export async function fetchCrossRef(
       authors,
       score: calculateScore(rawText, title, year, authors),
       source: "crossref" as const,
+      journal,
     };
   });
+
+  // Sort by score descending so A is always highest
+  return candidates.sort((a, b) => b.score - a.score);
 }
 
 // Tier 3: Semantic Scholar API (via proxy)
@@ -65,11 +72,12 @@ export async function fetchSemanticScholar(
   const data = await response.json();
   const papers: SemanticScholarPaper[] = data.data || [];
 
-  return papers.map((paper) => {
+  const candidates = papers.map((paper) => {
     const title = paper.title || "";
     const authors = paper.authors?.map((a) => a.name) || [];
     const year = paper.year || null;
     const doi = paper.externalIds?.DOI || null;
+    const journal = paper.venue || null;
 
     return {
       title,
@@ -78,8 +86,12 @@ export async function fetchSemanticScholar(
       authors,
       score: calculateScore(rawText, title, year, authors),
       source: "semantic-scholar" as const,
+      journal,
     };
   });
+
+  // Sort by score descending so A is always highest
+  return candidates.sort((a, b) => b.score - a.score);
 }
 
 // Fetch RIS format from DOI (via proxy to avoid CORS)

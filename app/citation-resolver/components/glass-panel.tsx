@@ -44,21 +44,17 @@ export function GlassPanel({
         noPadding ? "" : "p-5"
       } ${className}`}
       style={{
+        // Light: black tint, Dark: white tint
         background: isDark
-          ? "linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)"
-          : "linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.65) 100%)",
-        backdropFilter: "blur(20px) saturate(180%)",
-        WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          ? "rgba(255, 255, 255, 0.05)"
+          : "rgba(0, 0, 0, 0.03)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         border: isDark
           ? "1px solid rgba(255, 255, 255, 0.1)"
-          : "1px solid rgba(255, 255, 255, 0.6)",
-        boxShadow: shine.active
-          ? isDark
-            ? "0 8px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)"
-            : "0 8px 40px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 1px 0 rgba(255, 255, 255, 1)"
-          : isDark
-            ? "0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.05)"
-            : "0 4px 24px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+          : "1px solid rgba(0, 0, 0, 0.08)",
+        // Removed heavy drop shadows
+        boxShadow: "none",
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         transform: shine.active ? "translateY(-1px)" : "translateY(0)",
       }}
@@ -68,30 +64,19 @@ export function GlassPanel({
         className="pointer-events-none absolute inset-x-0 top-0 h-px z-10"
         style={{
           background: isDark
-            ? "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent)"
-            : "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent)",
+            ? "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent)"
+            : "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent)",
         }}
       />
 
-      {/* Mouse-following shine effect on border */}
+      {/* Mouse-following shine effect - much more subtle in dark mode */}
       <div
         className="pointer-events-none absolute inset-[-1px] z-0 rounded-2xl transition-opacity duration-500"
         style={{
           opacity: shine.active ? 1 : 0,
           background: `radial-gradient(600px circle at ${shine.x}px ${shine.y}px, ${
-            isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.5)"
-          }, transparent 50%)`,
-        }}
-      />
-
-      {/* Subtle inner glow */}
-      <div
-        className="pointer-events-none absolute inset-0 z-0 rounded-2xl transition-opacity duration-500"
-        style={{
-          opacity: shine.active ? 0.5 : 0,
-          background: `radial-gradient(400px circle at ${shine.x}px ${shine.y}px, ${
             isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(255, 255, 255, 0.3)"
-          }, transparent 60%)`,
+          }, transparent 50%)`,
         }}
       />
 
