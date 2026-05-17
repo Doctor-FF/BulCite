@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Play, Download, Beaker } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Play, Download, Beaker, Users } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
 import { fetchCrossRef, fetchSemanticScholar, fetchRIS, generateUnresolvedRIS } from "./utils/api";
@@ -21,6 +21,23 @@ export default function CitationResolverClient() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [activeUsers, setActiveUsers] = useState(0);
+
+  // Simulate active users counter (in production, this would connect to a real-time service)
+  useEffect(() => {
+    // Initial random count between 12-48
+    setActiveUsers(Math.floor(Math.random() * 37) + 12);
+    
+    // Fluctuate every 5-15 seconds
+    const interval = setInterval(() => {
+      setActiveUsers((prev) => {
+        const change = Math.floor(Math.random() * 7) - 3; // -3 to +3
+        return Math.max(5, Math.min(99, prev + change));
+      });
+    }, Math.random() * 10000 + 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const addLog = useCallback(
     (message: string, type: LogEntry["type"] = "info") => {
@@ -287,9 +304,15 @@ export default function CitationResolverClient() {
                 <Beaker className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
-                  Citation Resolver
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
+                    Citation Resolver
+                  </h1>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">{activeUsers} online</span>
+                  </div>
+                </div>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   ISI Citation Resolver & RIS Exporter
                 </p>
