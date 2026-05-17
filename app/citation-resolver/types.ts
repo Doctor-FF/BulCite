@@ -15,7 +15,7 @@ export interface ProcessedCitation {
   cleanQuery: string;
   status: "pending" | "processing" | "resolved" | "unresolved";
   candidates: CitationCandidate[];
-  selectedCandidateIndex: number;
+  selectedCandidateIndex: number | null;
   resolvedByUser: boolean;
 }
 

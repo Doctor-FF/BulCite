@@ -2,11 +2,10 @@
 
 import { CheckCircle2, XCircle, ExternalLink, AlertCircle } from "lucide-react";
 import type { ProcessedCitation } from "../types";
-import { CONFIDENCE_THRESHOLD } from "../utils/scoring";
 
 interface ResultsListProps {
   citations: ProcessedCitation[];
-  onSelectCandidate: (citationId: string, candidateIndex: number) => void;
+  onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
 }
 
 export function ResultsList({ citations, onSelectCandidate }: ResultsListProps) {
@@ -35,15 +34,18 @@ export function ResultsList({ citations, onSelectCandidate }: ResultsListProps) 
 
 interface ResultRowProps {
   citation: ProcessedCitation;
-  onSelectCandidate: (citationId: string, candidateIndex: number) => void;
+  onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
 }
 
 function ResultRow({ citation, onSelectCandidate }: ResultRowProps) {
-  const selectedCandidate = citation.candidates[citation.selectedCandidateIndex];
-  const isResolved =
-    citation.status === "resolved" ||
-    (selectedCandidate && selectedCandidate.score > CONFIDENCE_THRESHOLD);
+  const selectedCandidate = citation.selectedCandidateIndex !== null 
+    ? citation.candidates[citation.selectedCandidateIndex] 
+    : null;
+  const isResolved = citation.selectedCandidateIndex !== null && selectedCandidate;
   const isProcessing = citation.status === "processing";
+  const isUnresolvedSelected = citation.selectedCandidateIndex === null;
+
+  const candidateLabels = ["A", "B", "C"];
 
   return (
     <div
@@ -95,41 +97,57 @@ function ResultRow({ citation, onSelectCandidate }: ResultRowProps) {
                 </span>
               </div>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                Select a candidate below to resolve
+                Select a candidate to resolve
               </p>
             </div>
           )}
         </div>
 
-        {/* Candidate selection chips */}
-        {citation.candidates.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            {citation.candidates.slice(0, 3).map((candidate, index) => {
-              const isSelected = citation.selectedCandidateIndex === index;
-              const isLowConfidence = candidate.score <= CONFIDENCE_THRESHOLD;
+        {/* Selection buttons: UNRESOLVED, A, B, C */}
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {/* UNRESOLVED button */}
+          <button
+            onClick={() => onSelectCandidate(citation.id, null)}
+            disabled={isProcessing}
+            className={`
+              px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+              ${
+                isUnresolvedSelected
+                  ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/50"
+                  : "bg-neutral-200/50 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/50 dark:hover:bg-white/[0.08]"
+              }
+              disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+          >
+            UNRESOLVED
+          </button>
 
-              return (
-                <button
-                  key={index}
-                  onClick={() => onSelectCandidate(citation.id, index)}
-                  className={`
-                    w-8 h-8 rounded-lg text-sm font-medium transition-all duration-200
-                    ${
-                      isSelected
-                        ? isLowConfidence
-                          ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/50"
-                          : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/50"
-                        : "bg-neutral-200/50 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/50 dark:hover:bg-white/[0.08]"
-                    }
-                  `}
-                  title={`${candidate.title} (${(candidate.score * 100).toFixed(0)}%)`}
-                >
-                  {index + 1}
-                </button>
-              );
-            })}
-          </div>
-        )}
+          {/* A, B, C candidate buttons */}
+          {citation.candidates.slice(0, 3).map((candidate, index) => {
+            const isSelected = citation.selectedCandidateIndex === index;
+            const percentage = (candidate.score * 100).toFixed(0);
+
+            return (
+              <button
+                key={index}
+                onClick={() => onSelectCandidate(citation.id, index)}
+                disabled={isProcessing}
+                className={`
+                  px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                  ${
+                    isSelected
+                      ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/50"
+                      : "bg-neutral-200/50 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/50 dark:hover:bg-white/[0.08]"
+                  }
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
+                title={candidate.title}
+              >
+                {candidateLabels[index]} {percentage}%
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

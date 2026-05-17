@@ -5,7 +5,6 @@ import { Play, Download, Beaker } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
 import { fetchCrossRef, fetchSemanticScholar, fetchRIS, generateUnresolvedRIS } from "./utils/api";
-import { CONFIDENCE_THRESHOLD } from "./utils/scoring";
 import { GlassPanel } from "./components/glass-panel";
 import { ProcessingTerminal } from "./components/processing-terminal";
 import { ResultsList } from "./components/results-list";
@@ -34,9 +33,8 @@ export default function CitationResolverClient() {
 
   const calculateStats = useCallback((): ProcessingStats => {
     const resolved = citations.filter((c) => {
-      if (c.status === "resolved") return true;
-      const candidate = c.candidates[c.selectedCandidateIndex];
-      return candidate && candidate.score > CONFIDENCE_THRESHOLD;
+      // Resolved if user selected a candidate (not null/unresolved)
+      return c.selectedCandidateIndex !== null && c.candidates[c.selectedCandidateIndex];
     }).length;
 
     const processing = citations.filter((c) => c.status === "processing").length;
@@ -62,7 +60,7 @@ export default function CitationResolverClient() {
       addLog(`Found embedded DOI: ${directDOI}`, "success");
       return {
         ...citation,
-        status: "resolved",
+        status: "unresolved",
         candidates: [
           {
             title: rawText,
@@ -73,7 +71,7 @@ export default function CitationResolverClient() {
             source: "regex",
           },
         ],
-        selectedCandidateIndex: 0,
+        selectedCandidateIndex: null,
       };
     }
 
@@ -95,9 +93,9 @@ export default function CitationResolverClient() {
 
         return {
           ...citation,
-          status: bestScore > CONFIDENCE_THRESHOLD ? "resolved" : "unresolved",
+          status: "unresolved",
           candidates: crossRefCandidates,
-          selectedCandidateIndex: 0,
+          selectedCandidateIndex: null,
         };
       }
     } catch (error) {
@@ -122,9 +120,9 @@ export default function CitationResolverClient() {
 
         return {
           ...citation,
-          status: bestScore > CONFIDENCE_THRESHOLD ? "resolved" : "unresolved",
+          status: "unresolved",
           candidates: semanticCandidates,
-          selectedCandidateIndex: 0,
+          selectedCandidateIndex: null,
         };
       }
     } catch (error) {
@@ -136,7 +134,7 @@ export default function CitationResolverClient() {
       ...citation,
       status: "unresolved",
       candidates: [],
-      selectedCandidateIndex: 0,
+      selectedCandidateIndex: null,
     };
   };
 
@@ -155,14 +153,14 @@ export default function CitationResolverClient() {
     setLogs([]);
     addLog(`Starting extraction for ${lines.length} citation(s)...`, "info");
 
-    // Initialize citations
+    // Initialize citations - start with null (unresolved) selection
     const initialCitations: ProcessedCitation[] = lines.map((line) => ({
       id: generateId(),
       rawText: line,
       cleanQuery: sanitizeCitation(line),
       status: "pending",
       candidates: [],
-      selectedCandidateIndex: 0,
+      selectedCandidateIndex: null,
       resolvedByUser: false,
     }));
 
@@ -195,17 +193,24 @@ export default function CitationResolverClient() {
     setIsProcessing(false);
   };
 
-  const handleSelectCandidate = (citationId: string, candidateIndex: number) => {
+  const handleSelectCandidate = (citationId: string, candidateIndex: number | null) => {
     setCitations((prev) =>
       prev.map((c) => {
         if (c.id !== citationId) return c;
-        const candidate = c.candidates[candidateIndex];
-        const newStatus =
-          candidate && candidate.score > CONFIDENCE_THRESHOLD ? "resolved" : c.status;
+        // If null is selected, mark as unresolved
+        if (candidateIndex === null) {
+          return {
+            ...c,
+            selectedCandidateIndex: null,
+            status: "unresolved",
+            resolvedByUser: true,
+          };
+        }
+        // Otherwise mark as resolved with the selected candidate
         return {
           ...c,
           selectedCandidateIndex: candidateIndex,
-          status: newStatus === "unresolved" && candidate ? "resolved" : newStatus,
+          status: "resolved",
           resolvedByUser: true,
         };
       })
@@ -219,7 +224,9 @@ export default function CitationResolverClient() {
     const risEntries: string[] = [];
 
     for (const citation of citations) {
-      const candidate = citation.candidates[citation.selectedCandidateIndex];
+      const candidate = citation.selectedCandidateIndex !== null 
+        ? citation.candidates[citation.selectedCandidateIndex] 
+        : null;
 
       if (candidate?.doi) {
         const ris = await fetchRIS(candidate.doi);
@@ -290,95 +297,98 @@ export default function CitationResolverClient() {
           </div>
         </div>
 
-        {/* Main grid */}
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Panel - Input */}
-          <GlassPanel className="flex flex-col h-[calc(100vh-180px)] min-h-[500px]">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
-                Raw Citations
-              </h2>
+        {/* Main grid - Left (Raw Citations + Terminal) | Right (Results) */}
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6 h-[calc(100vh-180px)] min-h-[500px]">
+          {/* Left Panel - Raw Citations (60%) + Terminal (40%) */}
+          <div className="flex flex-col gap-4 h-full">
+            {/* Raw Citations - 60% */}
+            <GlassPanel className="flex flex-col h-[60%]">
+              <div className="flex items-center mb-3">
+                <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
+                  Raw Citations
+                </h2>
+              </div>
+
+              <textarea
+                value={rawInput}
+                onChange={(e) => setRawInput(e.target.value)}
+                placeholder="Paste raw citations here, one per line..."
+                className="flex-1 w-full p-3 rounded-xl resize-none font-mono text-xs
+                  bg-white/50 dark:bg-black/20
+                  border border-neutral-200/50 dark:border-white/[0.05]
+                  text-neutral-800 dark:text-neutral-200
+                  placeholder:text-neutral-400 dark:placeholder:text-neutral-500
+                  focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-white/20
+                  transition-all duration-200"
+              />
+
+              <button
+                onClick={handleExecute}
+                disabled={isProcessing || !rawInput.trim()}
+                className="mt-3 w-full py-2.5 px-4 rounded-xl font-medium text-sm
+                  flex items-center justify-center gap-2
+                  bg-neutral-900 dark:bg-white text-white dark:text-neutral-900
+                  hover:bg-neutral-800 dark:hover:bg-neutral-100
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  transition-all duration-200"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 dark:border-neutral-900/30 border-t-white dark:border-t-neutral-900 rounded-full animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    Execute Extraction
+                  </>
+                )}
+              </button>
+            </GlassPanel>
+
+            {/* Processing Terminal - 40% */}
+            <div className="h-[40%]">
+              <ProcessingTerminal logs={logs} />
+            </div>
+          </div>
+
+          {/* Right Panel - Stats + Results Dashboard */}
+          <div className="flex flex-col gap-4 h-full">
+            {/* Stats bar */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">
-                <span className="px-2 py-1 rounded-md bg-neutral-200/50 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400">
+                <span className="px-2.5 py-1.5 rounded-lg bg-neutral-200/50 dark:bg-white/[0.05] text-neutral-600 dark:text-neutral-400 font-medium">
                   Total: {stats.total}
                 </span>
-                <span className="px-2 py-1 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                <span className="px-2.5 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-medium">
                   Resolved: {stats.resolved}
                 </span>
-                <span className="px-2 py-1 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                <span className="px-2.5 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">
                   Unresolved: {stats.unresolved}
                 </span>
               </div>
-            </div>
-
-            <textarea
-              value={rawInput}
-              onChange={(e) => setRawInput(e.target.value)}
-              placeholder="Paste raw citations here, one per line...
-
-Example:
-Smith J, Doe A. (2023) Machine learning in research. Nature 123:45-67.
-[2] Brown et al. Deep learning applications. Science 2022;456:89-101."
-              className="flex-1 w-full p-4 rounded-xl resize-none font-mono text-sm
-                bg-white/50 dark:bg-black/20
-                border border-neutral-200/50 dark:border-white/[0.05]
-                text-neutral-800 dark:text-neutral-200
-                placeholder:text-neutral-400 dark:placeholder:text-neutral-500
-                focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-white/20
-                transition-all duration-200"
-            />
-
-            <button
-              onClick={handleExecute}
-              disabled={isProcessing || !rawInput.trim()}
-              className="mt-4 w-full py-3 px-4 rounded-xl font-medium text-sm
-                flex items-center justify-center gap-2
-                bg-neutral-900 dark:bg-white text-white dark:text-neutral-900
-                hover:bg-neutral-800 dark:hover:bg-neutral-100
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-all duration-200"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 dark:border-neutral-900/30 border-t-white dark:border-t-neutral-900 rounded-full animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  Execute Extraction
-                </>
-              )}
-            </button>
-          </GlassPanel>
-
-          {/* Right Panel - Terminal & Results */}
-          <div className="flex flex-col gap-6 h-[calc(100vh-180px)] min-h-[500px]">
-            {/* Processing Terminal */}
-            <div className="h-[40%]">
-              <ProcessingTerminal logs={logs} />
+              <button
+                onClick={handleExport}
+                disabled={citations.length === 0 || isExporting}
+                className="py-2 px-4 rounded-lg text-sm font-medium
+                  flex items-center gap-2
+                  bg-neutral-200/50 dark:bg-white/[0.05] 
+                  text-neutral-700 dark:text-neutral-300
+                  hover:bg-neutral-300/50 dark:hover:bg-white/[0.08]
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  transition-all duration-200"
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? "Exporting..." : "Download .ris"}
+              </button>
             </div>
 
             {/* Results Dashboard */}
             <GlassPanel className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center mb-4">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Results Dashboard
                 </h2>
-                <button
-                  onClick={handleExport}
-                  disabled={citations.length === 0 || isExporting}
-                  className="py-2 px-4 rounded-lg text-sm font-medium
-                    flex items-center gap-2
-                    bg-neutral-200/50 dark:bg-white/[0.05] 
-                    text-neutral-700 dark:text-neutral-300
-                    hover:bg-neutral-300/50 dark:hover:bg-white/[0.08]
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    transition-all duration-200"
-                >
-                  <Download className="h-4 w-4" />
-                  {isExporting ? "Exporting..." : "Download .ris"}
-                </button>
               </div>
 
               <div className="flex-1 overflow-y-auto">
