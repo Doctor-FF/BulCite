@@ -123,3 +123,52 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Citation Resolver - Floating orb animations */
+@keyframes float1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+}
+
+@keyframes float2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(-40px, 30px) scale(0.95);
+  }
+  66% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+}
+
+@keyframes float3 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(20px, 40px) scale(1.03);
+  }
+  66% {
+    transform: translate(-30px, -30px) scale(0.97);
+  }
+}
+
+.animate-float1 {
+  animation: float1 20s ease-in-out infinite;
+}
+
+.animate-float2 {
+  animation: float2 25s ease-in-out infinite;
+}
+
+.animate-float3 {
+  animation: float3 22s ease-in-out infinite;
+}
