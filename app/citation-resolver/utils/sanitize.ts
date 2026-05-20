@@ -57,13 +57,7 @@ export function sanitizeCitation(raw: string): string {
 export function extractDOI(text: string): string | null {
   const doiPattern = /10\.\d{4,9}\/[-._;()/:a-zA-Z0-9]+/;
   const match = text.match(doiPattern);
-  if (match) {
-    // Remove trailing punctuation that might have been captured
-    let doi = match[0];
-    doi = doi.replace(/[.,;:)\]]+$/, "");
-    return doi;
-  }
-  return null;
+  return match ? match[0] : null;
 }
 
 // Extract year from citation text

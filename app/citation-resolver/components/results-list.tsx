@@ -113,25 +113,19 @@ function ResultRow({ citation, index, onSelectCandidate, isHighlighted, threshol
           </div>
           {selectedCandidate.doi && (
             <a
-              href={`https://doi.org/${selectedCandidate.doi.replace(/[.,;:)\]]+$/, "")}`}
+              href={`https://doi.org/${selectedCandidate.doi}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors"
             >
               <ExternalLink className="h-3 w-3" />
-              {selectedCandidate.doi.replace(/[.,;:)\]]+$/, "")}
+              {selectedCandidate.doi}
             </a>
           )}
-          {/* First author, Year, and Journal metadata */}
-          {(selectedCandidate.authors?.length > 0 || selectedCandidate.year || selectedCandidate.journal) && (
+          {/* Journal and Year metadata */}
+          {(selectedCandidate.journal || selectedCandidate.year) && (
             <p className="text-xs text-neutral-400 dark:text-neutral-500">
-              {selectedCandidate.authors?.length > 0 && (
-                <span>{selectedCandidate.authors[0]}{selectedCandidate.authors.length > 1 ? " et al." : ""}</span>
-              )}
-              {selectedCandidate.authors?.length > 0 && selectedCandidate.year ? " • " : ""}
-              {selectedCandidate.year && <span>{selectedCandidate.year}</span>}
-              {(selectedCandidate.authors?.length > 0 || selectedCandidate.year) && selectedCandidate.journal ? " • " : ""}
-              {selectedCandidate.journal && <span>{selectedCandidate.journal}</span>}
+              {selectedCandidate.journal}{selectedCandidate.journal && selectedCandidate.year ? " • " : ""}{selectedCandidate.year}
             </p>
           )}
           <div className="text-xs text-neutral-500 dark:text-neutral-400">
