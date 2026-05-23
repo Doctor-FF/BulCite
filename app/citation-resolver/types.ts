@@ -6,7 +6,7 @@ export interface CitationCandidate {
   year: number | null;
   authors: string[];
   score: number;
-  source: "regex" | "crossref" | "semantic-scholar";
+  source: "regex" | "crossref" | "semantic-scholar" | "pubmed" | "openalex";
   journal?: string | null;
 }
 

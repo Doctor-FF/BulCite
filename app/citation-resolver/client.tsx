@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { Play, Download, Beaker, Users, ChevronUp, ChevronDown } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
-import { fetchCrossRef, fetchSemanticScholar, fetchRIS, generateUnresolvedRIS } from "./utils/api";
+import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS } from "./utils/api";
 import { GlassPanel } from "./components/glass-panel";
 import { ProcessingTerminal } from "./components/processing-terminal";
 import { ResultsList } from "./components/results-list";
@@ -26,7 +26,7 @@ export default function CitationResolverClient() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [activeUsers, setActiveUsers] = useState(0);
   const [threshold, setThreshold] = useState(40); // Default 40%
-  const [searchEngine, setSearchEngine] = useState<"auto" | "crossref" | "semantic-scholar">("auto");
+  const [searchEngine, setSearchEngine] = useState<"auto" | "crossref" | "semantic-scholar" | "pubmed" | "openalex">("auto");
   const [orbColors, setOrbColors] = useState<{ light: string; dark: string }[]>([]);
   const [highlightedCitationId, setHighlightedCitationId] = useState<string | null>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
@@ -206,6 +206,60 @@ export default function CitationResolverClient() {
         }
       } catch (error) {
         addLog(`Semantic Scholar error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
+      }
+    }
+
+    // PubMed (if pubmed selected)
+    if (searchEngine === "pubmed") {
+      try {
+        addLog("Querying PubMed...", "info");
+        const pubmedCandidates = await fetchPubMed(cleanQuery, rawText);
+
+        if (pubmedCandidates.length > 0) {
+          const bestScore = pubmedCandidates[0].score;
+          const thresholdDecimal = threshold / 100;
+          addLog(
+            `PubMed found ${pubmedCandidates.length} candidate(s), best: ${pubmedCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            bestScore >= thresholdDecimal ? "success" : "warning"
+          );
+
+          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
+          return {
+            ...citation,
+            status: autoSelect !== null ? "resolved" : "unresolved",
+            candidates: pubmedCandidates,
+            selectedCandidateIndex: autoSelect,
+          };
+        }
+      } catch (error) {
+        addLog(`PubMed error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
+      }
+    }
+
+    // OpenAlex (if openalex selected)
+    if (searchEngine === "openalex") {
+      try {
+        addLog("Querying OpenAlex...", "info");
+        const openalexCandidates = await fetchOpenAlex(cleanQuery, rawText);
+
+        if (openalexCandidates.length > 0) {
+          const bestScore = openalexCandidates[0].score;
+          const thresholdDecimal = threshold / 100;
+          addLog(
+            `OpenAlex found ${openalexCandidates.length} candidate(s), best: ${openalexCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            bestScore >= thresholdDecimal ? "success" : "warning"
+          );
+
+          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
+          return {
+            ...citation,
+            status: autoSelect !== null ? "resolved" : "unresolved",
+            candidates: openalexCandidates,
+            selectedCandidateIndex: autoSelect,
+          };
+        }
+      } catch (error) {
+        addLog(`OpenAlex error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
       }
     }
 
@@ -547,11 +601,11 @@ export default function CitationResolverClient() {
                 <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5 block">
                   Search Engine
                 </label>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={() => setSearchEngine("auto")}
                     disabled={isProcessing}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
                       ${searchEngine === "auto"
                         ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
                         : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
@@ -563,7 +617,7 @@ export default function CitationResolverClient() {
                   <button
                     onClick={() => setSearchEngine("crossref")}
                     disabled={isProcessing}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
                       ${searchEngine === "crossref"
                         ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
                         : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
@@ -575,7 +629,7 @@ export default function CitationResolverClient() {
                   <button
                     onClick={() => setSearchEngine("semantic-scholar")}
                     disabled={isProcessing}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
                       ${searchEngine === "semantic-scholar"
                         ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
                         : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
@@ -583,6 +637,30 @@ export default function CitationResolverClient() {
                       disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     Semantic
+                  </button>
+                  <button
+                    onClick={() => setSearchEngine("pubmed")}
+                    disabled={isProcessing}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                      ${searchEngine === "pubmed"
+                        ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
+                        : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    PubMed
+                  </button>
+                  <button
+                    onClick={() => setSearchEngine("openalex")}
+                    disabled={isProcessing}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                      ${searchEngine === "openalex"
+                        ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
+                        : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    OpenAlex
                   </button>
                 </div>
               </div>
