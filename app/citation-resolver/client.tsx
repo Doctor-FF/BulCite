@@ -26,6 +26,7 @@ export default function CitationResolverClient() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [activeUsers, setActiveUsers] = useState(0);
   const [threshold, setThreshold] = useState(40); // Default 40%
+  const [searchEngine, setSearchEngine] = useState<"auto" | "crossref" | "semantic-scholar">("auto");
   const [orbColors, setOrbColors] = useState<{ light: string; dark: string }[]>([]);
   const [highlightedCitationId, setHighlightedCitationId] = useState<string | null>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
@@ -148,56 +149,64 @@ export default function CitationResolverClient() {
       };
     }
 
-    // Tier 2: CrossRef API
-    try {
-      addLog("Querying CrossRef API...", "info");
-      const crossRefCandidates = await fetchCrossRef(cleanQuery, rawText);
+    // Tier 2: CrossRef API (if auto or crossref selected)
+    if (searchEngine === "auto" || searchEngine === "crossref") {
+      try {
+        addLog("Querying CrossRef API...", "info");
+        const crossRefCandidates = await fetchCrossRef(cleanQuery, rawText);
 
-      if (crossRefCandidates.length > 0) {
-        const bestScore = crossRefCandidates[0].score;
-        const thresholdDecimal = threshold / 100;
-        addLog(
-          `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-          bestScore >= thresholdDecimal ? "success" : "warning"
-        );
+        if (crossRefCandidates.length > 0) {
+          const bestScore = crossRefCandidates[0].score;
+          const thresholdDecimal = threshold / 100;
+          addLog(
+            `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            bestScore >= thresholdDecimal ? "success" : "warning"
+          );
 
-        // Auto-select first candidate if score >= threshold, otherwise unresolved
-        const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
-        return {
-          ...citation,
-          status: autoSelect !== null ? "resolved" : "unresolved",
-          candidates: crossRefCandidates,
-          selectedCandidateIndex: autoSelect,
-        };
+          // Auto-select first candidate if score >= threshold, otherwise unresolved
+          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
+          
+          // If crossref-only mode or we have a good match, return
+          if (searchEngine === "crossref" || bestScore >= thresholdDecimal) {
+            return {
+              ...citation,
+              status: autoSelect !== null ? "resolved" : "unresolved",
+              candidates: crossRefCandidates,
+              selectedCandidateIndex: autoSelect,
+            };
+          }
+        }
+      } catch (error) {
+        addLog(`CrossRef error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
       }
-    } catch (error) {
-      addLog(`CrossRef error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
     }
 
-    // Tier 3: Semantic Scholar fallback
-    try {
-      addLog("Falling back to Semantic Scholar...", "info");
-      const semanticCandidates = await fetchSemanticScholar(cleanQuery, rawText);
+    // Tier 3: Semantic Scholar (if auto or semantic-scholar selected)
+    if (searchEngine === "auto" || searchEngine === "semantic-scholar") {
+      try {
+        addLog(searchEngine === "auto" ? "Falling back to Semantic Scholar..." : "Querying Semantic Scholar...", "info");
+        const semanticCandidates = await fetchSemanticScholar(cleanQuery, rawText);
 
-      if (semanticCandidates.length > 0) {
-        const bestScore = semanticCandidates[0].score;
-        const thresholdDecimal = threshold / 100;
-        addLog(
-          `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-          bestScore >= thresholdDecimal ? "success" : "warning"
-        );
+        if (semanticCandidates.length > 0) {
+          const bestScore = semanticCandidates[0].score;
+          const thresholdDecimal = threshold / 100;
+          addLog(
+            `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            bestScore >= thresholdDecimal ? "success" : "warning"
+          );
 
-        // Auto-select first candidate if score >= threshold, otherwise unresolved
-        const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
-        return {
-          ...citation,
-          status: autoSelect !== null ? "resolved" : "unresolved",
-          candidates: semanticCandidates,
-          selectedCandidateIndex: autoSelect,
-        };
+          // Auto-select first candidate if score >= threshold, otherwise unresolved
+          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
+          return {
+            ...citation,
+            status: autoSelect !== null ? "resolved" : "unresolved",
+            candidates: semanticCandidates,
+            selectedCandidateIndex: autoSelect,
+          };
+        }
+      } catch (error) {
+        addLog(`Semantic Scholar error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
       }
-    } catch (error) {
-      addLog(`Semantic Scholar error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
     }
 
     addLog(`No match found for citation`, "error");
@@ -468,7 +477,7 @@ export default function CitationResolverClient() {
           {/* Left Panel - Raw Citations + Terminal - Fixed heights with scrolling */}
           <div className="flex flex-col gap-4">
             {/* Raw Citations - Fixed height with internal scroll */}
-            <GlassPanel className="flex flex-col h-[340px]">
+            <GlassPanel className="flex flex-col h-[400px]">
               <div className="flex items-center mb-3">
                 <h2 className="text-lg font-medium text-neutral-800 dark:text-white">
                   Raw Citations
@@ -530,6 +539,51 @@ export default function CitationResolverClient() {
                 <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
                   <span>10%</span>
                   <span>90%</span>
+                </div>
+              </div>
+
+              {/* Search Engine Selection */}
+              <div className="mt-3 px-1">
+                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5 block">
+                  Search Engine
+                </label>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setSearchEngine("auto")}
+                    disabled={isProcessing}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                      ${searchEngine === "auto"
+                        ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
+                        : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    onClick={() => setSearchEngine("crossref")}
+                    disabled={isProcessing}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                      ${searchEngine === "crossref"
+                        ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
+                        : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    CrossRef
+                  </button>
+                  <button
+                    onClick={() => setSearchEngine("semantic-scholar")}
+                    disabled={isProcessing}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                      ${searchEngine === "semantic-scholar"
+                        ? "bg-neutral-800 dark:bg-white text-white dark:text-neutral-900"
+                        : "bg-neutral-200/70 dark:bg-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300/70 dark:hover:bg-white/[0.12]"
+                      }
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    Semantic
+                  </button>
                 </div>
               </div>
 
