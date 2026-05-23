@@ -19,6 +19,23 @@ interface SemanticScholarPaper {
   venue?: string;
 }
 
+interface PubMedResult {
+  pmid: string;
+  title: string;
+  authors: string[];
+  year: number | null;
+  journal: string | null;
+  doi: string | null;
+}
+
+interface OpenAlexResult {
+  title: string;
+  year: number | null;
+  authors: string[];
+  doi: string | null;
+  journal: string | null;
+}
+
 // Tier 2: CrossRef API (via proxy)
 export async function fetchCrossRef(
   cleanQuery: string,
@@ -87,6 +104,68 @@ export async function fetchSemanticScholar(
       score: calculateScore(rawText, title, year, authors),
       source: "semantic-scholar" as const,
       journal,
+    };
+  });
+
+  // Sort by score descending so A is always highest
+  return candidates.sort((a, b) => b.score - a.score);
+}
+
+// PubMed API (via proxy)
+export async function fetchPubMed(
+  cleanQuery: string,
+  rawText: string
+): Promise<CitationCandidate[]> {
+  const response = await fetch(`/api/pubmed?query=${encodeURIComponent(cleanQuery)}`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `PubMed API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const results: PubMedResult[] = data.results || [];
+
+  const candidates = results.map((result) => {
+    return {
+      title: result.title,
+      doi: result.doi,
+      year: result.year,
+      authors: result.authors,
+      score: calculateScore(rawText, result.title, result.year, result.authors),
+      source: "pubmed" as const,
+      journal: result.journal,
+    };
+  });
+
+  // Sort by score descending so A is always highest
+  return candidates.sort((a, b) => b.score - a.score);
+}
+
+// OpenAlex API (via proxy)
+export async function fetchOpenAlex(
+  cleanQuery: string,
+  rawText: string
+): Promise<CitationCandidate[]> {
+  const response = await fetch(`/api/openalex?query=${encodeURIComponent(cleanQuery)}`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `OpenAlex API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const results: OpenAlexResult[] = data.results || [];
+
+  const candidates = results.map((result) => {
+    return {
+      title: result.title,
+      doi: result.doi,
+      year: result.year,
+      authors: result.authors,
+      score: calculateScore(rawText, result.title, result.year, result.authors),
+      source: "openalex" as const,
+      journal: result.journal,
     };
   });
 
