@@ -4,6 +4,9 @@ import { extractYear } from "./sanitize";
 
 // Sørensen–Dice coefficient for fuzzy string matching
 function diceCoefficient(str1: string, str2: string): number {
+  // Handle null/undefined inputs
+  if (!str1 || !str2) return 0;
+  
   const s1 = str1.toLowerCase();
   const s2 = str2.toLowerCase();
 

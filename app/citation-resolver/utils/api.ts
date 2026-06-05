@@ -127,12 +127,14 @@ export async function fetchPubMed(
   const results: PubMedResult[] = data.results || [];
 
   const candidates = results.map((result) => {
+    const title = result.title || "";
+    const authors = result.authors || [];
     return {
-      title: result.title,
+      title,
       doi: result.doi,
       year: result.year,
-      authors: result.authors,
-      score: calculateScore(rawText, result.title, result.year, result.authors),
+      authors,
+      score: calculateScore(rawText, title, result.year, authors),
       source: "pubmed" as const,
       journal: result.journal,
     };
@@ -158,12 +160,14 @@ export async function fetchOpenAlex(
   const results: OpenAlexResult[] = data.results || [];
 
   const candidates = results.map((result) => {
+    const title = result.title || "";
+    const authors = result.authors || [];
     return {
-      title: result.title,
+      title,
       doi: result.doi,
       year: result.year,
-      authors: result.authors,
-      score: calculateScore(rawText, result.title, result.year, result.authors),
+      authors,
+      score: calculateScore(rawText, title, result.year, authors),
       source: "openalex" as const,
       journal: result.journal,
     };
