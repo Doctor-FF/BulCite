@@ -91,7 +91,7 @@ export default function CitationResolverContent() {
       };
     }
 
-    const { cleanQuery } = sanitizeCitation(rawText);
+    const cleanQuery = sanitizeCitation(rawText);
     addLog(`Clean query: "${cleanQuery.substring(0, 50)}..."`, "info");
 
     // Tier 2: CrossRef API
