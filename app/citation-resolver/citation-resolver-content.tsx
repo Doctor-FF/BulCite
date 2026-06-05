@@ -56,7 +56,7 @@ export default function CitationResolverContent() {
         ...prev,
         {
           id: generateId(),
-          timestamp: new Date().toLocaleTimeString("en-US", { hour12: false }),
+          timestamp: new Date(),
           message,
           type,
         },
