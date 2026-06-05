@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Beaker, Users, FileText } from "lucide-react";
 import { ThemeToggle } from "./components/theme-toggle";
@@ -15,9 +15,12 @@ export default function BulCiteClient() {
   const [activeTab, setActiveTab] = useState<TabType>("resolver");
   const [activeUsers, setActiveUsers] = useState(0);
   const [orbColors, setOrbColors] = useState<{ light: string; dark: string }[]>([]);
+  const [mounted, setMounted] = useState(false);
 
-  // Generate random gradient colors on mount
-  useState(() => {
+  // Generate random gradient colors and active users on mount (client-side only)
+  useEffect(() => {
+    setMounted(true);
+    
     const colorOptions = [
       { light: "rgba(147, 197, 253, 0.4)", dark: "rgba(30, 58, 138, 0.3)" },
       { light: "rgba(253, 164, 175, 0.4)", dark: "rgba(136, 19, 55, 0.3)" },
@@ -43,7 +46,7 @@ export default function BulCiteClient() {
     }, Math.random() * 10000 + 5000);
 
     return () => clearInterval(interval);
-  });
+  }, []);
 
   return (
     <div className="min-h-screen relative overflow-hidden transition-colors duration-500">
@@ -52,7 +55,7 @@ export default function BulCiteClient() {
 
       {/* Animated blurred gradient orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {orbColors.length >= 4 && (
+        {mounted && orbColors.length >= 4 && (
           <>
             <div
               className="absolute w-[700px] h-[700px] rounded-full blur-[120px] -top-48 -left-48 animate-float1"
@@ -106,7 +109,7 @@ export default function BulCiteClient() {
                   </h1>
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
                     <Users className="h-3.5 w-3.5" />
-                    <span className="text-xs font-medium">{activeUsers} online</span>
+                    <span className="text-xs font-medium">{mounted ? activeUsers : "--"} online</span>
                   </div>
                 </div>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
