@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Upload, Download, FileText, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
-import { GlassPanel } from "../components/glass-panel";
+import { GlassPanel } from "./components/glass-panel";
 
 interface MappingEntry {
   wordCitationNumber: number;
