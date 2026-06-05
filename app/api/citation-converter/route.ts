@@ -8,6 +8,16 @@ import {
   HeadingLevel,
 } from "docx";
 
+// Increase body size limit to 50MB for large DOCX files
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 // Types
 interface RisRecord {
   position: number;
