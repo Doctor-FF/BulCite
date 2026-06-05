@@ -27,6 +27,9 @@ interface ConversionResult {
   convertedDocxBase64: string;
 }
 
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 export default function CitationConverterClient() {
   const [docxFile, setDocxFile] = useState<File | null>(null);
   const [risFile, setRisFile] = useState<File | null>(null);
@@ -38,6 +41,10 @@ export default function CitationConverterClient() {
   const handleDocxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.name.endsWith(".docx")) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB. Your file: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+        return;
+      }
       setDocxFile(file);
       setError(null);
     } else if (file) {
@@ -48,6 +55,10 @@ export default function CitationConverterClient() {
   const handleRisChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.name.endsWith(".ris")) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB. Your file: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+        return;
+      }
       setRisFile(file);
       setError(null);
     } else if (file) {
