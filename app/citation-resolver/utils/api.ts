@@ -178,19 +178,20 @@ export async function fetchOpenAlex(
 }
 
 // Fetch RIS format from DOI (via proxy to avoid CORS)
-export async function fetchRIS(doi: string): Promise<string | null> {
-  try {
-    const response = await fetch(`/api/ris?doi=${encodeURIComponent(doi)}`);
+export async function fetchRIS(doi: string): Promise<string> {
+  const response = await fetch(`/api/ris?doi=${encodeURIComponent(doi)}`);
 
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    return data.ris || null;
-  } catch {
-    return null;
+  if (!response.ok) {
+    throw new Error(`Failed to fetch RIS: ${response.status}`);
   }
+
+  const data = await response.json();
+  
+  if (!data.ris || !data.ris.trim()) {
+    throw new Error("Empty RIS response");
+  }
+  
+  return data.ris;
 }
 
 // Generate fallback RIS for unresolved citations

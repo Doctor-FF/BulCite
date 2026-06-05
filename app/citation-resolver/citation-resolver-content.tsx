@@ -328,6 +328,8 @@ export default function CitationResolverContent() {
     addLog(`Exporting ${toExport.length} citation(s) to RIS...`, "info");
 
     const risEntries: string[] = [];
+    let successCount = 0;
+    let fallbackCount = 0;
 
     for (const citation of toExport) {
       if (
@@ -337,21 +339,35 @@ export default function CitationResolverContent() {
         const doi = citation.candidates[citation.selectedCandidateIndex].doi!;
         try {
           const ris = await fetchRIS(doi);
-          risEntries.push(ris);
-          addLog(`Fetched RIS for DOI: ${doi}`, "success");
+          if (ris && ris.trim()) {
+            risEntries.push(ris);
+            successCount++;
+            addLog(`Fetched RIS for DOI: ${doi}`, "success");
+          } else {
+            // RIS fetch returned empty/null, use fallback
+            const fallbackRIS = generateUnresolvedRIS(citation.rawText);
+            risEntries.push(fallbackRIS);
+            fallbackCount++;
+            addLog(`Empty RIS for ${doi}, using fallback entry`, "warning");
+          }
         } catch (error) {
           addLog(`Failed to fetch RIS for ${doi}: ${error}`, "error");
           const fallbackRIS = generateUnresolvedRIS(citation.rawText);
           risEntries.push(fallbackRIS);
+          fallbackCount++;
         }
       } else {
         const fallbackRIS = generateUnresolvedRIS(citation.rawText);
         risEntries.push(fallbackRIS);
+        fallbackCount++;
         addLog(`No DOI for citation, using fallback entry`, "warning");
       }
     }
 
-    const blob = new Blob([risEntries.join("\n")], { type: "application/x-research-info-systems" });
+    // Filter out any empty entries just in case
+    const validEntries = risEntries.filter(entry => entry && entry.trim());
+    
+    const blob = new Blob([validEntries.join("\n")], { type: "application/x-research-info-systems" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -359,7 +375,7 @@ export default function CitationResolverContent() {
     a.click();
     URL.revokeObjectURL(url);
 
-    addLog(`Exported ${risEntries.length} citation(s) to RIS`, "success");
+    addLog(`Exported ${validEntries.length} citation(s) to RIS (${successCount} from DOI, ${fallbackCount} fallback)`, "success");
     setIsExporting(false);
   };
 
