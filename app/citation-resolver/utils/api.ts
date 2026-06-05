@@ -36,6 +36,45 @@ interface OpenAlexResult {
   journal: string | null;
 }
 
+// Verify DOI exists in CrossRef and get full metadata
+export async function verifyDOIviaCrossRef(
+  doi: string
+): Promise<CitationCandidate | null> {
+  try {
+    const cleanDoi = doi.replace(/[.,;:]+$/, "").trim();
+    const response = await fetch(`/api/crossref/verify?doi=${encodeURIComponent(cleanDoi)}`);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data.valid || !data.work) {
+      return null;
+    }
+
+    const work = data.work as CrossRefWork;
+    const title = work.title?.[0] || "";
+    const authors = work.author?.map((a) => 
+      a.family ? (a.given ? `${a.family}, ${a.given}` : a.family) : ""
+    ).filter(Boolean) || [];
+    const year = work.issued?.["date-parts"]?.[0]?.[0] || null;
+    const journal = work["container-title"]?.[0] || null;
+
+    return {
+      title,
+      doi: work.DOI,
+      year,
+      authors,
+      score: 1.0, // Direct DOI match = 100%
+      source: "crossref",
+      journal,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Tier 2: CrossRef API (via proxy)
 export async function fetchCrossRef(
   cleanQuery: string,

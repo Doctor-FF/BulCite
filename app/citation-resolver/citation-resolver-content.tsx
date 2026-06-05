@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Play, Download, ChevronUp, ChevronDown } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
-import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS } from "./utils/api";
+import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS, verifyDOIviaCrossRef } from "./utils/api";
 import { GlassPanel } from "./components/glass-panel";
 import { ProcessingTerminal } from "./components/processing-terminal";
 import { ResultsList } from "./components/results-list";
@@ -70,25 +70,23 @@ export default function CitationResolverContent() {
   ): Promise<ProcessedCitation> => {
     const rawText = citation.rawText;
 
-    // Tier 1: Try to extract DOI directly
+    // Tier 1: Try to extract DOI directly and verify it via CrossRef
     const directDOI = extractDOI(rawText);
     if (directDOI) {
-      addLog(`Found DOI in text: ${directDOI}`, "success");
-      return {
-        ...citation,
-        status: "resolved",
-        candidates: [
-          {
-            title: "Direct DOI Match",
-            doi: directDOI,
-            year: null,
-            authors: [],
-            score: 1.0,
-            source: "regex",
-          },
-        ],
-        selectedCandidateIndex: 0,
-      };
+      addLog(`Found DOI in text: ${directDOI}, verifying via CrossRef...`, "info");
+      
+      const verifiedCandidate = await verifyDOIviaCrossRef(directDOI);
+      if (verifiedCandidate) {
+        addLog(`DOI verified: ${verifiedCandidate.title?.substring(0, 40) || directDOI}...`, "success");
+        return {
+          ...citation,
+          status: "resolved",
+          candidates: [verifiedCandidate],
+          selectedCandidateIndex: 0,
+        };
+      } else {
+        addLog(`DOI ${directDOI} not found in CrossRef, falling back to search...`, "warning");
+      }
     }
 
     const cleanQuery = sanitizeCitation(rawText);
