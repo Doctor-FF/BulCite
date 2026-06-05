@@ -8,9 +8,13 @@ interface MappingEntry {
   wordCitationNumber: number;
   risPosition: number;
   endnoteRecordNumber: number;
-  author: string | null;
+  authorRaw: string | null;
+  authorUsed: string | null;
   year: string | null;
   title: string | null;
+  parsedCitation: string;
+  hasWarning: boolean;
+  warningMessage: string | null;
 }
 
 interface ConversionResult {
@@ -161,7 +165,7 @@ export default function CitationConverterClient() {
             <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Upload a Word document and RIS file. The tool maps the citation numbers used in 
               the Word document to RIS order, then converts plain-text IEEE citations like [8] 
-              and [10] into EndNote temporary citations like {"{#8}"} and {"{#9}"}.
+              and [10] into full EndNote temporary citations like {"{Smith, 2020 #8}"} and {"{Wilson, 2023 #9}"}.
             </p>
           </div>
         </div>
@@ -367,10 +371,16 @@ export default function CitationConverterClient() {
                       RIS Pos
                     </th>
                     <th className="text-left py-2 px-2 text-neutral-600 dark:text-neutral-400 font-medium">
-                      EndNote {"{#}"}
+                      EndNote #
                     </th>
                     <th className="text-left py-2 px-2 text-neutral-600 dark:text-neutral-400 font-medium">
-                      Author
+                      Parsed Citation
+                    </th>
+                    <th className="text-left py-2 px-2 text-neutral-600 dark:text-neutral-400 font-medium">
+                      Author Raw
+                    </th>
+                    <th className="text-left py-2 px-2 text-neutral-600 dark:text-neutral-400 font-medium">
+                      Author Used
                     </th>
                     <th className="text-left py-2 px-2 text-neutral-600 dark:text-neutral-400 font-medium">
                       Year
@@ -384,7 +394,9 @@ export default function CitationConverterClient() {
                   {result.mappingTable.map((entry, i) => (
                     <tr
                       key={i}
-                      className="border-b border-neutral-100 dark:border-white/5 hover:bg-neutral-50/50 dark:hover:bg-white/[0.02]"
+                      className={`border-b border-neutral-100 dark:border-white/5 hover:bg-neutral-50/50 dark:hover:bg-white/[0.02] ${
+                        entry.hasWarning ? "bg-amber-50/30 dark:bg-amber-500/[0.03]" : ""
+                      }`}
                     >
                       <td className="py-2 px-2 text-neutral-800 dark:text-neutral-200">
                         [{entry.wordCitationNumber}]
@@ -392,16 +404,28 @@ export default function CitationConverterClient() {
                       <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400">
                         {entry.risPosition}
                       </td>
-                      <td className="py-2 px-2 text-emerald-600 dark:text-emerald-400 font-medium">
-                        {"{#"}{entry.endnoteRecordNumber}{"}"}
+                      <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400">
+                        #{entry.endnoteRecordNumber}
                       </td>
-                      <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400 max-w-[150px] truncate">
-                        {entry.author || "—"}
+                      <td className="py-2 px-2 text-emerald-600 dark:text-emerald-400 font-medium max-w-[200px]">
+                        <span className="break-all">{entry.parsedCitation}</span>
+                      </td>
+                      <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400 max-w-[120px] truncate">
+                        {entry.authorRaw || "—"}
+                      </td>
+                      <td className="py-2 px-2 text-neutral-800 dark:text-neutral-200 max-w-[100px] truncate">
+                        {entry.authorUsed || "—"}
+                        {entry.hasWarning && entry.warningMessage?.includes("author") && (
+                          <span className="ml-1 text-amber-600 dark:text-amber-400" title={entry.warningMessage || ""}>!</span>
+                        )}
                       </td>
                       <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400">
                         {entry.year || "—"}
+                        {entry.hasWarning && entry.warningMessage?.includes("year") && (
+                          <span className="ml-1 text-amber-600 dark:text-amber-400" title={entry.warningMessage || ""}>!</span>
+                        )}
                       </td>
-                      <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400 max-w-[250px] truncate">
+                      <td className="py-2 px-2 text-neutral-600 dark:text-neutral-400 max-w-[200px] truncate">
                         {entry.title || "—"}
                       </td>
                     </tr>

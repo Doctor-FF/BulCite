@@ -21,7 +21,8 @@ export const maxDuration = 60;
 // Types
 interface RisRecord {
   position: number;
-  author: string | null;
+  authorRaw: string | null;
+  authorUsed: string | null;
   year: string | null;
   title: string | null;
 }
@@ -30,9 +31,13 @@ interface MappingEntry {
   wordCitationNumber: number;
   risPosition: number;
   endnoteRecordNumber: number;
-  author: string | null;
+  authorRaw: string | null;
+  authorUsed: string | null;
   year: string | null;
   title: string | null;
+  parsedCitation: string;
+  hasWarning: boolean;
+  warningMessage: string | null;
 }
 
 interface ConversionResult {
@@ -47,6 +52,47 @@ interface ConversionResult {
   };
 }
 
+// Extract author surname from raw author field
+function extractAuthorUsed(authorRaw: string | null): string {
+  if (!authorRaw || authorRaw.trim() === "") return "Unknown";
+  
+  const trimmed = authorRaw.trim();
+  
+  // Check if it contains a comma (surname, given name format)
+  if (trimmed.includes(",")) {
+    const surname = trimmed.split(",")[0].trim();
+    return surname || "Unknown";
+  }
+  
+  // Check if it looks like an institutional author (multiple words, no clear surname)
+  const words = trimmed.split(/\s+/);
+  if (words.length >= 3 && !trimmed.match(/^[A-Z][a-z]+\s+[A-Z]/)) {
+    // Likely institutional - keep intact
+    return trimmed;
+  }
+  
+  // For "First Last" format, take the last word as surname
+  if (words.length >= 2) {
+    return words[words.length - 1];
+  }
+  
+  // Single word - use as is
+  return trimmed;
+}
+
+// Extract 4-digit year from various formats
+function extractYear(value: string | null): string {
+  if (!value || value.trim() === "") return "n.d.";
+  
+  const yearMatch = value.match(/(\d{4})/);
+  return yearMatch ? yearMatch[1] : "n.d.";
+}
+
+// Build EndNote temporary citation for a single record
+function buildEndNoteTemporaryCitation(authorUsed: string, year: string, recordNumber: number): string {
+  return `${authorUsed}, ${year} #${recordNumber}`;
+}
+
 // Parse RIS file and extract records in order
 function parseRis(risContent: string): RisRecord[] {
   const records: RisRecord[] = [];
@@ -54,7 +100,7 @@ function parseRis(risContent: string): RisRecord[] {
 
   entries.forEach((entry, index) => {
     const lines = entry.split("\n");
-    let author: string | null = null;
+    let authorRaw: string | null = null;
     let year: string | null = null;
     let title: string | null = null;
 
@@ -64,18 +110,20 @@ function parseRis(risContent: string): RisRecord[] {
         const [, tag, value] = match;
         const trimmedValue = value.trim();
 
-        // Author (first one found)
-        if (!author && (tag === "AU" || tag === "A1")) {
-          author = trimmedValue;
+        // Author (first AU found, then A1 as fallback)
+        if (!authorRaw && tag === "AU") {
+          authorRaw = trimmedValue;
+        } else if (!authorRaw && tag === "A1") {
+          authorRaw = trimmedValue;
         }
 
-        // Year
-        if (!year && (tag === "PY" || tag === "Y1" || tag === "DA")) {
-          // Extract 4-digit year
-          const yearMatch = trimmedValue.match(/(\d{4})/);
-          if (yearMatch) {
-            year = yearMatch[1];
-          }
+        // Year (prefer PY, then Y1, then DA)
+        if (!year && tag === "PY") {
+          year = trimmedValue;
+        } else if (!year && tag === "Y1") {
+          year = trimmedValue;
+        } else if (!year && tag === "DA") {
+          year = trimmedValue;
         }
 
         // Title
@@ -87,8 +135,9 @@ function parseRis(risContent: string): RisRecord[] {
 
     records.push({
       position: index + 1,
-      author,
-      year,
+      authorRaw,
+      authorUsed: extractAuthorUsed(authorRaw),
+      year: extractYear(year),
       title,
     });
   });
@@ -141,18 +190,42 @@ function buildCitationMapping(
     const risPosition = index + 1;
     const endnoteRecordNumber = startRecordNumber + index;
     const risRecord = risRecords[index] || {
-      author: null,
-      year: null,
+      authorRaw: null,
+      authorUsed: "Unknown",
+      year: "n.d.",
       title: null,
     };
+
+    const authorUsed = risRecord.authorUsed || "Unknown";
+    const year = risRecord.year || "n.d.";
+    const parsedCitation = `{${buildEndNoteTemporaryCitation(authorUsed, year, endnoteRecordNumber)}}`;
+    
+    // Determine warnings
+    let hasWarning = false;
+    let warningMessage: string | null = null;
+    
+    if (!risRecord.authorRaw && risRecord.year === "n.d.") {
+      hasWarning = true;
+      warningMessage = "Missing author and year";
+    } else if (!risRecord.authorRaw) {
+      hasWarning = true;
+      warningMessage = "Missing author";
+    } else if (risRecord.year === "n.d.") {
+      hasWarning = true;
+      warningMessage = "Missing year";
+    }
 
     return {
       wordCitationNumber: wordNum,
       risPosition,
       endnoteRecordNumber,
-      author: risRecord.author,
-      year: risRecord.year,
+      authorRaw: risRecord.authorRaw,
+      authorUsed,
+      year,
       title: risRecord.title,
+      parsedCitation,
+      hasWarning,
+      warningMessage,
     };
   });
 }
@@ -162,10 +235,10 @@ function convertDocxCitations(
   text: string,
   mapping: MappingEntry[]
 ): { converted: string; replacementCount: number } {
-  // Create a lookup from word citation number to EndNote record number
-  const lookup = new Map<number, number>();
+  // Create a lookup from word citation number to mapping entry
+  const lookup = new Map<number, MappingEntry>();
   for (const entry of mapping) {
-    lookup.set(entry.wordCitationNumber, entry.endnoteRecordNumber);
+    lookup.set(entry.wordCitationNumber, entry);
   }
 
   let replacementCount = 0;
@@ -175,7 +248,7 @@ function convertDocxCitations(
     /\[([0-9,\-–—\s]+)\]/g,
     (match, content: string) => {
       const parts = content.split(",").map((p) => p.trim());
-      const endnoteNumbers: number[] = [];
+      const citationItems: string[] = [];
 
       for (const part of parts) {
         const rangeMatch = part.match(/(\d+)\s*[-–—]\s*(\d+)/);
@@ -183,26 +256,34 @@ function convertDocxCitations(
           const start = parseInt(rangeMatch[1], 10);
           const end = parseInt(rangeMatch[2], 10);
           for (let i = start; i <= end; i++) {
-            const endnoteNum = lookup.get(i);
-            if (endnoteNum !== undefined) {
-              endnoteNumbers.push(endnoteNum);
+            const entry = lookup.get(i);
+            if (entry) {
+              citationItems.push(buildEndNoteTemporaryCitation(
+                entry.authorUsed || "Unknown",
+                entry.year || "n.d.",
+                entry.endnoteRecordNumber
+              ));
             }
           }
         } else {
           const num = parseInt(part, 10);
           if (!isNaN(num)) {
-            const endnoteNum = lookup.get(num);
-            if (endnoteNum !== undefined) {
-              endnoteNumbers.push(endnoteNum);
+            const entry = lookup.get(num);
+            if (entry) {
+              citationItems.push(buildEndNoteTemporaryCitation(
+                entry.authorUsed || "Unknown",
+                entry.year || "n.d.",
+                entry.endnoteRecordNumber
+              ));
             }
           }
         }
       }
 
-      if (endnoteNumbers.length > 0) {
+      if (citationItems.length > 0) {
         replacementCount++;
-        // Format as {#1; #2; #3}
-        return `{${endnoteNumbers.map((n) => `#${n}`).join("; ")}}`;
+        // Format as {Author1, Year1 #1; Author2, Year2 #2}
+        return `{${citationItems.join("; ")}}`;
       }
 
       // If no valid numbers found, return original
@@ -219,17 +300,23 @@ function generateMappingCsv(mapping: MappingEntry[]): string {
     "Word Citation Number",
     "RIS Position",
     "EndNote Record Number",
-    "Author",
+    "Parsed EndNote Citation",
+    "Author Raw",
+    "Author Used",
     "Year",
     "Title",
+    "Warning",
   ];
   const rows = mapping.map((entry) => [
     entry.wordCitationNumber.toString(),
     entry.risPosition.toString(),
     entry.endnoteRecordNumber.toString(),
-    entry.author || "",
+    `"${entry.parsedCitation}"`,
+    `"${(entry.authorRaw || "").replace(/"/g, '""')}"`,
+    `"${(entry.authorUsed || "").replace(/"/g, '""')}"`,
     entry.year || "",
     `"${(entry.title || "").replace(/"/g, '""')}"`,
+    entry.warningMessage || "",
   ]);
 
   return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
