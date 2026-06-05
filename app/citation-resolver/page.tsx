@@ -1,5 +1,5 @@
-import CitationResolverClient from "./client";
+import BulCiteClient from "./bulcite-client";
 
 export default function CitationResolverPage() {
-  return <CitationResolverClient />;
+  return <BulCiteClient />;
 }

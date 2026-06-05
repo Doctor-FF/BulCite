@@ -2,9 +2,9 @@ import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "BulCite - ISI Citation Resolver & RIS Exporter",
+  title: "BulCite - Citation Tools Suite",
   description:
-    "Advanced ISI Citation Resolver with fuzzy matching, multi-tier API lookup, and RIS export functionality.",
+    "Advanced citation tools including ISI Citation Resolver with fuzzy matching, multi-tier API lookup, RIS export, and IEEE to EndNote converter.",
 };
 
 export default function CitationResolverLayout({
