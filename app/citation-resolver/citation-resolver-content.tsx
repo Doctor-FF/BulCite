@@ -249,16 +249,33 @@ export default function CitationResolverContent() {
 
       addLog(`Processing: "${citation.rawText.substring(0, 50)}..."`, "info");
 
-      const processed = await processCitation(citation);
-      results.push(processed);
+      try {
+        const processed = await processCitation(citation);
+        results.push(processed);
 
-      setCitations((prev) =>
-        prev.map((c) => (c.id === citation.id ? processed : c))
-      );
+        setCitations((prev) =>
+          prev.map((c) => (c.id === citation.id ? processed : c))
+        );
+      } catch (error) {
+        console.error("[v0] Error processing citation:", error);
+        addLog(`Error processing citation ${i + 1}: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+        
+        // Mark as unresolved but continue with next citation
+        const failedCitation: ProcessedCitation = {
+          ...citation,
+          status: "unresolved",
+          candidates: [],
+        };
+        results.push(failedCitation);
+        
+        setCitations((prev) =>
+          prev.map((c) => (c.id === citation.id ? failedCitation : c))
+        );
+      }
 
-      // Small delay between requests
+      // Small delay between requests to avoid rate limiting
       if (i < initialCitations.length - 1) {
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 500));
       }
     }
 
