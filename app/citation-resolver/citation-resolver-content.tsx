@@ -104,7 +104,7 @@ export default function CitationResolverContent() {
           const bestScore = crossRefCandidates[0].score;
           const thresholdDecimal = threshold / 100;
           addLog(
-            `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${crossRefCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${(crossRefCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
             bestScore >= thresholdDecimal ? "success" : "warning"
           );
 
@@ -134,7 +134,7 @@ export default function CitationResolverContent() {
           const bestScore = semanticCandidates[0].score;
           const thresholdDecimal = threshold / 100;
           addLog(
-            `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${semanticCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${(semanticCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
             bestScore >= thresholdDecimal ? "success" : "warning"
           );
 
@@ -161,7 +161,7 @@ export default function CitationResolverContent() {
           const bestScore = pubmedCandidates[0].score;
           const thresholdDecimal = threshold / 100;
           addLog(
-            `PubMed found ${pubmedCandidates.length} candidate(s), best: ${pubmedCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            `PubMed found ${pubmedCandidates.length} candidate(s), best: ${(pubmedCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
             bestScore >= thresholdDecimal ? "success" : "warning"
           );
 
@@ -188,7 +188,7 @@ export default function CitationResolverContent() {
           const bestScore = openalexCandidates[0].score;
           const thresholdDecimal = threshold / 100;
           addLog(
-            `OpenAlex found ${openalexCandidates.length} candidate(s), best: ${openalexCandidates[0].title.substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+            `OpenAlex found ${openalexCandidates.length} candidate(s), best: ${(openalexCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
             bestScore >= thresholdDecimal ? "success" : "warning"
           );
 
