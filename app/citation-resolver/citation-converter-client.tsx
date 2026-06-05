@@ -71,19 +71,31 @@ export default function CitationConverterClient() {
       formData.append("ris", risFile);
       formData.append("startRecordNumber", startRecordNumber.toString());
 
+      console.log("[v0] Sending conversion request...");
       const response = await fetch("/api/citation-converter", {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Conversion failed");
+      console.log("[v0] Response status:", response.status);
+      const responseText = await response.text();
+      console.log("[v0] Response text (first 500 chars):", responseText.substring(0, 500));
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("[v0] JSON parse error:", parseError);
+        throw new Error(`Server returned invalid JSON: ${responseText.substring(0, 200)}`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Conversion failed");
+      }
+
       setResult(data);
     } catch (err) {
+      console.error("[v0] Conversion error:", err);
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsProcessing(false);
