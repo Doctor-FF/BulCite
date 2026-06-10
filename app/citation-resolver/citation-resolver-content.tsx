@@ -330,6 +330,12 @@ export default function CitationResolverContent() {
     let fallbackCount = 0;
 
     for (const citation of toExport) {
+      console.log("[v0] Export citation:", {
+        rawText: citation.rawText.substring(0, 40),
+        selectedCandidateIndex: citation.selectedCandidateIndex,
+        selectedDoi: citation.selectedCandidateIndex !== null ? citation.candidates[citation.selectedCandidateIndex]?.doi : "N/A",
+        allDois: citation.candidates.map((c) => c.doi),
+      });
       if (
         citation.selectedCandidateIndex !== null &&
         citation.candidates[citation.selectedCandidateIndex]?.doi
