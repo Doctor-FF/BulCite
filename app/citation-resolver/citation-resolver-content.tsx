@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Play, Download, ChevronUp, ChevronDown } from "lucide-react";
 import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
-import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS, verifyDOIviaCrossRef } from "./utils/api";
+import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS, generateRISFromCandidate, verifyDOIviaCrossRef } from "./utils/api";
 import { GlassPanel } from "./components/glass-panel";
 import { ProcessingTerminal } from "./components/processing-terminal";
 import { ResultsList } from "./components/results-list";
@@ -330,11 +330,13 @@ export default function CitationResolverContent() {
     let fallbackCount = 0;
 
     for (const citation of toExport) {
-      if (
-        citation.selectedCandidateIndex !== null &&
-        citation.candidates[citation.selectedCandidateIndex]?.doi
-      ) {
-        const doi = citation.candidates[citation.selectedCandidateIndex].doi!;
+      const selectedCandidate =
+        citation.selectedCandidateIndex !== null
+          ? citation.candidates[citation.selectedCandidateIndex]
+          : null;
+
+      if (selectedCandidate?.doi) {
+        const doi = selectedCandidate.doi;
         try {
           const ris = await fetchRIS(doi);
           if (ris && ris.trim()) {
@@ -342,23 +344,28 @@ export default function CitationResolverContent() {
             successCount++;
             addLog(`Fetched RIS for DOI: ${doi}`, "success");
           } else {
-            // RIS fetch returned empty/null, use fallback
-            const fallbackRIS = generateUnresolvedRIS(citation.rawText);
-            risEntries.push(fallbackRIS);
+            // RIS fetch returned empty - build from selected candidate metadata
+            risEntries.push(generateRISFromCandidate(selectedCandidate));
             fallbackCount++;
-            addLog(`Empty RIS for ${doi}, using fallback entry`, "warning");
+            addLog(`Empty RIS for ${doi}, using selected candidate metadata`, "warning");
           }
         } catch (error) {
-          addLog(`Failed to fetch RIS for ${doi}: ${error}`, "error");
-          const fallbackRIS = generateUnresolvedRIS(citation.rawText);
-          risEntries.push(fallbackRIS);
+          // DOI fetch failed (e.g. 404) - build from selected candidate metadata
+          // so the user's selection is still reflected in the export.
+          addLog(`RIS fetch failed for ${doi}, using selected candidate metadata`, "warning");
+          risEntries.push(generateRISFromCandidate(selectedCandidate));
           fallbackCount++;
         }
-      } else {
-        const fallbackRIS = generateUnresolvedRIS(citation.rawText);
-        risEntries.push(fallbackRIS);
+      } else if (selectedCandidate) {
+        // Selected candidate without a DOI - still export its metadata
+        risEntries.push(generateRISFromCandidate(selectedCandidate));
         fallbackCount++;
-        addLog(`No DOI for citation, using fallback entry`, "warning");
+        addLog(`No DOI for selected candidate, using its metadata`, "warning");
+      } else {
+        // Truly unresolved - no selection made
+        risEntries.push(generateUnresolvedRIS(citation.rawText));
+        fallbackCount++;
+        addLog(`Unresolved citation, using raw text entry`, "warning");
       }
     }
 
