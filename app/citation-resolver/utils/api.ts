@@ -241,3 +241,44 @@ ER  -
 
 `;
 }
+
+// Generate RIS from a selected candidate's metadata.
+// Used when the DOI-based RIS fetch fails, so the user's selection is still
+// reflected in the export instead of falling back to the raw unresolved text.
+export function generateRISFromCandidate(candidate: {
+  title: string;
+  doi: string | null;
+  year: number | null;
+  authors: string[];
+  journal?: string | null;
+}): string {
+  const lines: string[] = ["TY  - JOUR"];
+
+  if (candidate.title) {
+    lines.push(`TI  - ${candidate.title}`);
+  }
+
+  for (const author of candidate.authors || []) {
+    if (author && author.trim()) {
+      lines.push(`AU  - ${author.trim()}`);
+    }
+  }
+
+  if (candidate.year) {
+    lines.push(`PY  - ${candidate.year}`);
+  }
+
+  if (candidate.journal) {
+    lines.push(`JO  - ${candidate.journal}`);
+  }
+
+  if (candidate.doi) {
+    const cleanDoi = candidate.doi.replace(/[.,;:]+$/, "").trim();
+    lines.push(`DO  - ${cleanDoi}`);
+  }
+
+  lines.push("ER  - ");
+  lines.push("");
+
+  return lines.join("\n");
+}
