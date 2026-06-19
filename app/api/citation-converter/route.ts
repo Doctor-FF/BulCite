@@ -1,19 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import mammoth from "mammoth";
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-} from "docx";
-
-// Increase body size limit to 50MB for large DOCX files
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+import PizZip from "pizzip";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -294,6 +281,98 @@ function convertDocxCitations(
   return { converted, replacementCount };
 }
 
+// Escape special characters for safe insertion into Word XML
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Build the EndNote replacement string for a single [..] citation group.
+// Returns null if no valid mapped numbers were found.
+function buildReplacementForGroup(
+  content: string,
+  lookup: Map<number, MappingEntry>
+): string | null {
+  const parts = content.split(",").map((p) => p.trim());
+  const citationItems: string[] = [];
+
+  for (const part of parts) {
+    const rangeMatch = part.match(/(\d+)\s*[-–—]\s*(\d+)/);
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10);
+      const end = parseInt(rangeMatch[2], 10);
+      for (let i = start; i <= end; i++) {
+        const entry = lookup.get(i);
+        if (entry) {
+          citationItems.push(
+            buildEndNoteTemporaryCitation(
+              entry.authorUsed || "Unknown",
+              entry.year || "n.d.",
+              entry.endnoteRecordNumber
+            )
+          );
+        }
+      }
+    } else {
+      const num = parseInt(part, 10);
+      if (!isNaN(num)) {
+        const entry = lookup.get(num);
+        if (entry) {
+          citationItems.push(
+            buildEndNoteTemporaryCitation(
+              entry.authorUsed || "Unknown",
+              entry.year || "n.d.",
+              entry.endnoteRecordNumber
+            )
+          );
+        }
+      }
+    }
+  }
+
+  if (citationItems.length === 0) return null;
+  return `{${citationItems.join("; ")}}`;
+}
+
+// Replace IEEE citations in-place within the Word document XML.
+// This only rewrites the text content inside <w:t> nodes, leaving every
+// other part of the document (styles, formatting, images, tables) untouched.
+function convertDocxXml(
+  xml: string,
+  mapping: MappingEntry[]
+): { xml: string; replacementCount: number } {
+  const lookup = new Map<number, MappingEntry>();
+  for (const entry of mapping) {
+    lookup.set(entry.wordCitationNumber, entry);
+  }
+
+  let replacementCount = 0;
+
+  // Process the text content of each <w:t ...>...</w:t> run individually.
+  const newXml = xml.replace(
+    /(<w:t\b[^>]*>)([\s\S]*?)(<\/w:t>)/g,
+    (full, open: string, text: string, close: string) => {
+      if (!text.includes("[")) return full;
+
+      const replaced = text.replace(
+        /\[([0-9,\-–—\s]+)\]/g,
+        (match, content: string) => {
+          const replacement = buildReplacementForGroup(content, lookup);
+          if (replacement === null) return match;
+          replacementCount++;
+          return escapeXml(replacement);
+        }
+      );
+
+      return open + replaced + close;
+    }
+  );
+
+  return { xml: newXml, replacementCount };
+}
+
 // Generate CSV from mapping
 function generateMappingCsv(mapping: MappingEntry[]): string {
   const headers = [
@@ -343,10 +422,11 @@ export async function POST(request: NextRequest) {
     const risContent = await risFile.text();
     const risRecords = parseRis(risContent);
 
-    // Extract text from DOCX
+    // Read DOCX bytes once - used for both text extraction and in-place editing
     const docxBuffer = await docxFile.arrayBuffer();
+    const docxNodeBuffer = Buffer.from(docxBuffer);
     const { value: docxText } = await mammoth.extractRawText({
-      buffer: Buffer.from(docxBuffer),
+      buffer: docxNodeBuffer,
     });
 
     // Extract citation numbers
@@ -376,31 +456,40 @@ export async function POST(request: NextRequest) {
       startRecordNumber
     );
 
-    // Convert citations
-    const { converted, replacementCount } = convertDocxCitations(
-      docxText,
-      mapping
-    );
+    // Build a plain-text preview of the converted citations (for the UI only)
+    const { converted } = convertDocxCitations(docxText, mapping);
 
     // Generate CSV
     const mappingCsv = generateMappingCsv(mapping);
 
-    // Create converted DOCX
-    const doc = new Document({
-      sections: [
-        {
-          properties: {},
-          children: converted.split("\n\n").map(
-            (para) =>
-              new Paragraph({
-                children: [new TextRun(para)],
-              })
-          ),
-        },
-      ],
+    // Edit the ORIGINAL DOCX in place so all formatting is preserved.
+    // We only rewrite the citation tokens inside word/document.xml.
+    const zip = new PizZip(docxNodeBuffer);
+    const documentXmlPath = "word/document.xml";
+    const originalDocumentXml = zip.file(documentXmlPath)?.asText();
+
+    if (!originalDocumentXml) {
+      throw new Error("Could not read word/document.xml from the DOCX file");
+    }
+
+    const { xml: convertedXml, replacementCount } = convertDocxXml(
+      originalDocumentXml,
+      mapping
+    );
+
+    zip.file(documentXmlPath, convertedXml);
+    const docxBuffer2 = zip.generate({
+      type: "nodebuffer",
+      compression: "DEFLATE",
     });
 
-    const docxBuffer2 = await Packer.toBuffer(doc);
+    // If in-place replacements were fewer than the citation groups in the raw
+    // text, some citations may have been split across runs in Word.
+    if (replacementCount === 0 && citationNumbers.length > 0) {
+      warnings.push(
+        "No citation tokens were replaced inside the document. The citations may be formatted as fields or split across styled runs."
+      );
+    }
 
     const result: ConversionResult = {
       mappingTable: mapping,

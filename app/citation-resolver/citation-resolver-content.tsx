@@ -66,9 +66,11 @@ export default function CitationResolverContent() {
   );
 
   const processCitation = async (
-    citation: ProcessedCitation
+    citation: ProcessedCitation,
+    engineOverride?: "auto" | "crossref" | "semantic-scholar" | "pubmed" | "openalex"
   ): Promise<ProcessedCitation> => {
     const rawText = citation.rawText;
+    const engine = engineOverride ?? searchEngine;
 
     // Tier 1: Try to extract DOI directly and verify it via CrossRef
     const directDOI = extractDOI(rawText);
@@ -93,7 +95,7 @@ export default function CitationResolverContent() {
     addLog(`Clean query: "${cleanQuery.substring(0, 50)}..."`, "info");
 
     // Tier 2: CrossRef API
-    if (searchEngine === "auto" || searchEngine === "crossref") {
+    if (engine === "auto" || engine === "crossref") {
       try {
         addLog("Querying CrossRef API...", "info");
         const crossRefCandidates = await fetchCrossRef(cleanQuery, rawText);
@@ -108,7 +110,7 @@ export default function CitationResolverContent() {
 
           const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
           
-          if (searchEngine === "crossref" || bestScore >= thresholdDecimal) {
+          if (engine === "crossref" || bestScore >= thresholdDecimal) {
             return {
               ...citation,
               status: autoSelect !== null ? "resolved" : "unresolved",
@@ -123,9 +125,9 @@ export default function CitationResolverContent() {
     }
 
     // Tier 3: Semantic Scholar
-    if (searchEngine === "auto" || searchEngine === "semantic-scholar") {
+    if (engine === "auto" || engine === "semantic-scholar") {
       try {
-        addLog(searchEngine === "auto" ? "Falling back to Semantic Scholar..." : "Querying Semantic Scholar...", "info");
+        addLog(engine === "auto" ? "Falling back to Semantic Scholar..." : "Querying Semantic Scholar...", "info");
         const semanticCandidates = await fetchSemanticScholar(cleanQuery, rawText);
 
         if (semanticCandidates.length > 0) {
@@ -150,7 +152,7 @@ export default function CitationResolverContent() {
     }
 
     // PubMed
-    if (searchEngine === "pubmed") {
+    if (engine === "pubmed") {
       try {
         addLog("Querying PubMed...", "info");
         const pubmedCandidates = await fetchPubMed(cleanQuery, rawText);
@@ -177,7 +179,7 @@ export default function CitationResolverContent() {
     }
 
     // OpenAlex
-    if (searchEngine === "openalex") {
+    if (engine === "openalex") {
       try {
         addLog("Querying OpenAlex...", "info");
         const openalexCandidates = await fetchOpenAlex(cleanQuery, rawText);
@@ -225,9 +227,11 @@ export default function CitationResolverContent() {
     const initialCitations: ProcessedCitation[] = lines.map((line) => ({
       id: generateId(),
       rawText: line,
+      cleanQuery: "",
       status: "pending",
       candidates: [],
       selectedCandidateIndex: null,
+      resolvedByUser: false,
     }));
 
     setCitations(initialCitations);
@@ -296,6 +300,56 @@ export default function CitationResolverContent() {
       );
     },
     []
+  );
+
+  const handleResearch = useCallback(
+    async (
+      citationId: string,
+      engine: "auto" | "crossref" | "semantic-scholar" | "pubmed" | "openalex"
+    ) => {
+      const target = citations.find((c) => c.id === citationId);
+      if (!target) return;
+
+      // Mark this citation as processing
+      setCitations((prev) =>
+        prev.map((c) =>
+          c.id === citationId ? { ...c, status: "processing" } : c
+        )
+      );
+
+      addLog(
+        `Re-searching "${target.rawText.substring(0, 50)}..." via ${engine}`,
+        "info"
+      );
+
+      try {
+        const processed = await processCitation(target, engine);
+        setCitations((prev) =>
+          prev.map((c) =>
+            c.id === citationId
+              ? { ...processed, resolvedByUser: processed.selectedCandidateIndex !== null }
+              : c
+          )
+        );
+        addLog(
+          processed.candidates.length > 0
+            ? `Re-search found ${processed.candidates.length} candidate(s) via ${engine}`
+            : `Re-search found no results via ${engine}`,
+          processed.candidates.length > 0 ? "success" : "warning"
+        );
+      } catch (error) {
+        addLog(
+          `Re-search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          "error"
+        );
+        setCitations((prev) =>
+          prev.map((c) =>
+            c.id === citationId ? { ...c, status: "unresolved" } : c
+          )
+        );
+      }
+    },
+    [citations, addLog]
   );
 
   const calculateStats = useCallback((): ProcessingStats => {
@@ -608,6 +662,7 @@ export default function CitationResolverContent() {
             <ResultsList
               citations={citations}
               onSelectCandidate={handleSelectCandidate}
+              onResearch={handleResearch}
               highlightedId={highlightedCitationId}
               threshold={threshold}
             />
