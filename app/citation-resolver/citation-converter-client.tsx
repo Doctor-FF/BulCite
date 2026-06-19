@@ -31,8 +31,10 @@ interface ConversionResult {
   convertedDocxBase64: string;
 }
 
-const MAX_FILE_SIZE_MB = 10;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const MAX_DOCX_SIZE_MB = 50;
+const MAX_DOCX_SIZE_BYTES = MAX_DOCX_SIZE_MB * 1024 * 1024;
+const MAX_RIS_SIZE_MB = 10;
+const MAX_RIS_SIZE_BYTES = MAX_RIS_SIZE_MB * 1024 * 1024;
 
 export default function CitationConverterClient() {
   const [docxFile, setDocxFile] = useState<File | null>(null);
@@ -45,8 +47,8 @@ export default function CitationConverterClient() {
   const handleDocxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.name.endsWith(".docx")) {
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        setError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB. Your file: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+      if (file.size > MAX_DOCX_SIZE_BYTES) {
+        setError(`File too large. Maximum size is ${MAX_DOCX_SIZE_MB}MB. Your file: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
         return;
       }
       setDocxFile(file);
@@ -59,8 +61,8 @@ export default function CitationConverterClient() {
   const handleRisChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.name.endsWith(".ris")) {
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        setError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB. Your file: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+      if (file.size > MAX_RIS_SIZE_BYTES) {
+        setError(`File too large. Maximum size is ${MAX_RIS_SIZE_MB}MB. Your file: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
         return;
       }
       setRisFile(file);
@@ -163,9 +165,10 @@ export default function CitationConverterClient() {
               IEEE to EndNote Temporary Citation Converter
             </h2>
             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              Upload a Word document and RIS file. The tool maps the citation numbers used in 
+              Upload a Word document (up to 50MB) and RIS file. The tool maps the citation numbers used in 
               the Word document to RIS order, then converts plain-text IEEE citations like [8] 
               and [10] into full EndNote temporary citations like {"{Smith, 2020 #8}"} and {"{Wilson, 2023 #9}"}.
+              Your original Word formatting is preserved &mdash; only the citation tokens are reformatted.
             </p>
           </div>
         </div>

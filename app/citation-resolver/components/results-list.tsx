@@ -1,17 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, ExternalLink, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, ExternalLink, AlertCircle, RotateCw } from "lucide-react";
 import type { ProcessedCitation } from "../types";
+
+type SearchEngine = "auto" | "crossref" | "semantic-scholar" | "pubmed" | "openalex";
 
 interface ResultsListProps {
   citations: ProcessedCitation[];
   onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
+  onResearch: (citationId: string, engine: SearchEngine) => void;
   highlightedId?: string | null;
   threshold: number;
 }
 
-export function ResultsList({ citations, onSelectCandidate, highlightedId, threshold }: ResultsListProps) {
+export function ResultsList({ citations, onSelectCandidate, onResearch, highlightedId, threshold }: ResultsListProps) {
   if (citations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-neutral-500 dark:text-neutral-400">
@@ -30,6 +33,7 @@ export function ResultsList({ citations, onSelectCandidate, highlightedId, thres
           citation={citation}
           index={index + 1}
           onSelectCandidate={onSelectCandidate}
+          onResearch={onResearch}
           isHighlighted={highlightedId === citation.id}
           threshold={threshold}
         />
@@ -42,12 +46,22 @@ interface ResultRowProps {
   citation: ProcessedCitation;
   index: number;
   onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
+  onResearch: (citationId: string, engine: SearchEngine) => void;
   isHighlighted: boolean;
   threshold: number;
 }
 
-function ResultRow({ citation, index, onSelectCandidate, isHighlighted, threshold }: ResultRowProps) {
+const ENGINE_OPTIONS: { value: SearchEngine; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "crossref", label: "CrossRef" },
+  { value: "semantic-scholar", label: "Semantic" },
+  { value: "pubmed", label: "PubMed" },
+  { value: "openalex", label: "OpenAlex" },
+];
+
+function ResultRow({ citation, index, onSelectCandidate, onResearch, isHighlighted, threshold }: ResultRowProps) {
   const [glowing, setGlowing] = useState(false);
+  const [researchEngine, setResearchEngine] = useState<SearchEngine>("crossref");
   
   // Handle glow animation when highlighted
   useEffect(() => {
@@ -195,6 +209,31 @@ function ResultRow({ citation, index, onSelectCandidate, isHighlighted, threshol
             </button>
           );
         })}
+      </div>
+
+      {/* Re-search controls: change source and search again */}
+      <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-neutral-200/50 dark:border-white/[0.05]">
+        <span className="text-xs text-neutral-500 dark:text-neutral-400">Re-search via</span>
+        <select
+          value={researchEngine}
+          onChange={(e) => setResearchEngine(e.target.value as SearchEngine)}
+          disabled={isProcessing}
+          className="px-2 py-1 rounded-lg text-xs font-medium bg-neutral-100 dark:bg-white/[0.08] text-neutral-700 dark:text-neutral-300 border border-neutral-200/50 dark:border-white/[0.05] focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {ENGINE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => onResearch(citation.id, researchEngine)}
+          disabled={isProcessing}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-neutral-800 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <RotateCw className={`h-3 w-3 ${isProcessing ? "animate-spin" : ""}`} />
+          Search again
+        </button>
       </div>
     </div>
   );
