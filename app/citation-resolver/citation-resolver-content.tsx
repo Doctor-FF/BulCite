@@ -269,6 +269,14 @@ export default function CitationResolverContent() {
     []
   );
 
+  const handleToggleExclude = useCallback((citationId: string) => {
+    setCitations((prev) =>
+      prev.map((c) =>
+        c.id === citationId ? { ...c, excluded: !c.excluded } : c
+      )
+    );
+  }, []);
+
   const handleResearch = useCallback(
     async (
       citationId: string,
@@ -337,11 +345,16 @@ export default function CitationResolverContent() {
 
   const handleExport = async () => {
     const toExport = citations.filter(
-      (c) => c.status === "resolved" || c.status === "unresolved"
+      (c) => (c.status === "resolved" || c.status === "unresolved") && !c.excluded
     );
     if (toExport.length === 0) {
       addLog("No citations to export", "error");
       return;
+    }
+
+    const excludedCount = citations.filter((c) => c.excluded).length;
+    if (excludedCount > 0) {
+      addLog(`Skipping ${excludedCount} excluded citation(s)`, "info");
     }
 
     setIsExporting(true);
@@ -649,6 +662,7 @@ export default function CitationResolverContent() {
               citations={citations}
               onSelectCandidate={handleSelectCandidate}
               onResearch={handleResearch}
+              onToggleExclude={handleToggleExclude}
               highlightedId={highlightedCitationId}
               threshold={threshold}
             />

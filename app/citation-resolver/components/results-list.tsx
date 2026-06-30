@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, ExternalLink, AlertCircle, RotateCw } from "lucide-react";
+import { CheckCircle2, XCircle, ExternalLink, AlertCircle, RotateCw, Trash2, Undo2 } from "lucide-react";
 import type { ProcessedCitation } from "../types";
 
 type SearchEngine = "auto" | "crossref" | "semantic-scholar" | "pubmed" | "openalex";
@@ -10,11 +10,12 @@ interface ResultsListProps {
   citations: ProcessedCitation[];
   onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
   onResearch: (citationId: string, engine: SearchEngine) => void;
+  onToggleExclude: (citationId: string) => void;
   highlightedId?: string | null;
   threshold: number;
 }
 
-export function ResultsList({ citations, onSelectCandidate, onResearch, highlightedId, threshold }: ResultsListProps) {
+export function ResultsList({ citations, onSelectCandidate, onResearch, onToggleExclude, highlightedId, threshold }: ResultsListProps) {
   if (citations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-neutral-500 dark:text-neutral-400">
@@ -34,6 +35,7 @@ export function ResultsList({ citations, onSelectCandidate, onResearch, highligh
           index={index + 1}
           onSelectCandidate={onSelectCandidate}
           onResearch={onResearch}
+          onToggleExclude={onToggleExclude}
           isHighlighted={highlightedId === citation.id}
           threshold={threshold}
         />
@@ -47,6 +49,7 @@ interface ResultRowProps {
   index: number;
   onSelectCandidate: (citationId: string, candidateIndex: number | null) => void;
   onResearch: (citationId: string, engine: SearchEngine) => void;
+  onToggleExclude: (citationId: string) => void;
   isHighlighted: boolean;
   threshold: number;
 }
@@ -59,9 +62,10 @@ const ENGINE_OPTIONS: { value: SearchEngine; label: string }[] = [
   { value: "openalex", label: "OpenAlex" },
 ];
 
-function ResultRow({ citation, index, onSelectCandidate, onResearch, isHighlighted, threshold }: ResultRowProps) {
+function ResultRow({ citation, index, onSelectCandidate, onResearch, onToggleExclude, isHighlighted, threshold }: ResultRowProps) {
   const [glowing, setGlowing] = useState(false);
   const [researchEngine, setResearchEngine] = useState<SearchEngine>("crossref");
+  const isExcluded = !!citation.excluded;
   
   // Handle glow animation when highlighted
   useEffect(() => {
@@ -88,9 +92,11 @@ function ResultRow({ citation, index, onSelectCandidate, onResearch, isHighlight
       data-unresolved={isUnresolvedSelected ? "true" : "false"}
       className={`
         p-4 rounded-xl transition-all duration-300 
-        ${isResolved 
-          ? "bg-emerald-50/50 dark:bg-emerald-500/[0.05] border border-emerald-200/50 dark:border-emerald-500/20" 
-          : "bg-amber-50/30 dark:bg-amber-500/[0.03] border border-amber-200/30 dark:border-amber-500/10"
+        ${isExcluded
+          ? "bg-neutral-100/60 dark:bg-white/[0.02] border border-neutral-200/60 dark:border-white/[0.05] opacity-60"
+          : isResolved 
+            ? "bg-emerald-50/50 dark:bg-emerald-500/[0.05] border border-emerald-200/50 dark:border-emerald-500/20" 
+            : "bg-amber-50/30 dark:bg-amber-500/[0.03] border border-amber-200/30 dark:border-amber-500/10"
         }
         ${glowing ? "ring-2 ring-amber-400 dark:ring-amber-500 ring-opacity-75" : ""}
       `}
@@ -228,13 +234,46 @@ function ResultRow({ citation, index, onSelectCandidate, onResearch, isHighlight
         </select>
         <button
           onClick={() => onResearch(citation.id, researchEngine)}
-          disabled={isProcessing}
+          disabled={isProcessing || isExcluded}
           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-neutral-800 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <RotateCw className={`h-3 w-3 ${isProcessing ? "animate-spin" : ""}`} />
           Search again
         </button>
+
+        {/* Exclude / restore from the downloaded RIS file */}
+        <button
+          onClick={() => onToggleExclude(citation.id)}
+          disabled={isProcessing}
+          className={`
+            ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors
+            disabled:opacity-50 disabled:cursor-not-allowed
+            ${isExcluded
+              ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30"
+              : "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30"
+            }
+          `}
+          title={isExcluded ? "Include this citation in the download again" : "Exclude this citation from the downloaded RIS file"}
+        >
+          {isExcluded ? (
+            <>
+              <Undo2 className="h-3 w-3" />
+              Restore
+            </>
+          ) : (
+            <>
+              <Trash2 className="h-3 w-3" />
+              Exclude
+            </>
+          )}
+        </button>
       </div>
+
+      {isExcluded && (
+        <p className="mt-2 text-xs text-red-500 dark:text-red-400">
+          Excluded — will not be included in the downloaded RIS file
+        </p>
+      )}
     </div>
   );
 }

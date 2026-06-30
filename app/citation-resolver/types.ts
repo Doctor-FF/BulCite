@@ -18,6 +18,7 @@ export interface ProcessedCitation {
   candidates: CitationCandidate[];
   selectedCandidateIndex: number | null;
   resolvedByUser: boolean;
+  excluded?: boolean;
 }
 
 export interface LogEntry {
