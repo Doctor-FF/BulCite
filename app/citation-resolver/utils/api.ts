@@ -36,6 +36,42 @@ interface OpenAlexResult {
   journal: string | null;
 }
 
+// Returns true if a candidate has at least one real author AND a year.
+function hasAuthorAndYear(c: CitationCandidate): boolean {
+  const hasAuthor =
+    Array.isArray(c.authors) &&
+    c.authors.some((a) => typeof a === "string" && a.trim().length > 0);
+  const hasYear = c.year !== null && c.year !== undefined;
+  return hasAuthor && hasYear;
+}
+
+// Filter out candidates without author/year metadata when the option is on.
+export function filterValidCandidates(
+  candidates: CitationCandidate[],
+  requireAuthorYear: boolean
+): CitationCandidate[] {
+  if (!requireAuthorYear) return candidates;
+  return candidates.filter(hasAuthorAndYear);
+}
+
+// Merge candidate lists from multiple sources, de-duplicating by DOI (or by
+// normalized title when no DOI exists), keeping the highest-scoring entry.
+export function mergeCandidates(
+  lists: CitationCandidate[][]
+): CitationCandidate[] {
+  const seen = new Map<string, CitationCandidate>();
+  for (const candidate of lists.flat()) {
+    const key = candidate.doi
+      ? `doi:${candidate.doi.toLowerCase().trim()}`
+      : `title:${(candidate.title || "").toLowerCase().replace(/\s+/g, " ").trim()}`;
+    const existing = seen.get(key);
+    if (!existing || candidate.score > existing.score) {
+      seen.set(key, candidate);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => b.score - a.score);
+}
+
 // Verify DOI exists in CrossRef and get full metadata
 export async function verifyDOIviaCrossRef(
   doi: string

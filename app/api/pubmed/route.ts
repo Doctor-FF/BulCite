@@ -10,9 +10,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const encoded = encodeURIComponent(query);
-    
+    // NCBI recommends identifying tool & email; helps with rate limits.
+    const ncbiParams = "&tool=bulcite&email=contact@bulcite.app";
+
     // Step 1: Search for PMIDs
-    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encoded}&retmax=3&retmode=json`;
+    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encoded}&retmax=3&retmode=json${ncbiParams}`;
     const searchResponse = await fetch(searchUrl);
     
     if (!searchResponse.ok) {
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
     
     // Step 2: Fetch details for each PMID
     const idsParam = pmids.join(",");
-    const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${idsParam}&retmode=json`;
+    const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${idsParam}&retmode=json${ncbiParams}`;
     const summaryResponse = await fetch(summaryUrl);
     
     if (!summaryResponse.ok) {
