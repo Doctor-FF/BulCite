@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Play, Download, ChevronUp, ChevronDown } from "lucide-react";
-import type { ProcessedCitation, LogEntry, ProcessingStats } from "./types";
+import type { ProcessedCitation, LogEntry, ProcessingStats, CitationCandidate } from "./types";
 import { sanitizeCitation, extractDOI } from "./utils/sanitize";
-import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS, generateRISFromCandidate, verifyDOIviaCrossRef } from "./utils/api";
+import { fetchCrossRef, fetchSemanticScholar, fetchPubMed, fetchOpenAlex, fetchRIS, generateUnresolvedRIS, generateRISFromCandidate, verifyDOIviaCrossRef, filterValidCandidates, mergeCandidates } from "./utils/api";
 import { GlassPanel } from "./components/glass-panel";
 import { ProcessingTerminal } from "./components/processing-terminal";
 import { ResultsList } from "./components/results-list";
@@ -22,6 +22,7 @@ export default function CitationResolverContent() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [threshold, setThreshold] = useState(40);
   const [searchEngine, setSearchEngine] = useState<"auto" | "crossref" | "semantic-scholar" | "pubmed" | "openalex">("auto");
+  const [filterMissingMetadata, setFilterMissingMetadata] = useState(true);
   const [highlightedCitationId, setHighlightedCitationId] = useState<string | null>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
 
@@ -93,120 +94,81 @@ export default function CitationResolverContent() {
 
     const cleanQuery = sanitizeCitation(rawText);
     addLog(`Clean query: "${cleanQuery.substring(0, 50)}..."`, "info");
+    const thresholdDecimal = threshold / 100;
 
-    // Tier 2: CrossRef API
-    if (engine === "auto" || engine === "crossref") {
-      try {
-        addLog("Querying CrossRef API...", "info");
-        const crossRefCandidates = await fetchCrossRef(cleanQuery, rawText);
-
-        if (crossRefCandidates.length > 0) {
-          const bestScore = crossRefCandidates[0].score;
-          const thresholdDecimal = threshold / 100;
-          addLog(
-            `CrossRef found ${crossRefCandidates.length} candidate(s), best: ${(crossRefCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-            bestScore >= thresholdDecimal ? "success" : "warning"
-          );
-
-          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
-          
-          if (engine === "crossref" || bestScore >= thresholdDecimal) {
-            return {
-              ...citation,
-              status: autoSelect !== null ? "resolved" : "unresolved",
-              candidates: crossRefCandidates,
-              selectedCandidateIndex: autoSelect,
-            };
-          }
+    // Filter candidates (optionally dropping ones missing author/year), then
+    // build the final result with auto-selection based on the threshold.
+    const finalize = (candidates: CitationCandidate[]): ProcessedCitation => {
+      const filtered = filterValidCandidates(candidates, filterMissingMetadata);
+      if (filtered.length === 0) {
+        if (candidates.length > 0 && filterMissingMetadata) {
+          addLog(`All matches were missing author/year and were hidden`, "warning");
+        } else {
+          addLog(`No match found for citation`, "error");
         }
-      } catch (error) {
-        addLog(`CrossRef error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
+        return { ...citation, status: "unresolved", candidates: [] };
       }
+      const bestScore = filtered[0].score;
+      const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
+      addLog(
+        `Best match: ${(filtered[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
+        bestScore >= thresholdDecimal ? "success" : "warning"
+      );
+      return {
+        ...citation,
+        status: autoSelect !== null ? "resolved" : "unresolved",
+        candidates: filtered,
+        selectedCandidateIndex: autoSelect,
+      };
+    };
+
+    // Auto mode: query ALL sources in parallel, then merge & de-duplicate.
+    if (engine === "auto") {
+      addLog("Querying CrossRef, Semantic Scholar, PubMed & OpenAlex in parallel...", "info");
+      const [cr, ss, pm, oa] = await Promise.allSettled([
+        fetchCrossRef(cleanQuery, rawText),
+        fetchSemanticScholar(cleanQuery, rawText),
+        fetchPubMed(cleanQuery, rawText),
+        fetchOpenAlex(cleanQuery, rawText),
+      ]);
+
+      const lists: CitationCandidate[][] = [];
+      const collect = (
+        label: string,
+        result: PromiseSettledResult<CitationCandidate[]>
+      ) => {
+        if (result.status === "fulfilled") {
+          lists.push(result.value);
+        } else {
+          const reason = result.reason;
+          addLog(`${label} error: ${reason instanceof Error ? reason.message : String(reason)}`, "error");
+        }
+      };
+      collect("CrossRef", cr);
+      collect("Semantic Scholar", ss);
+      collect("PubMed", pm);
+      collect("OpenAlex", oa);
+
+      const merged = mergeCandidates(lists);
+      addLog(`Merged ${merged.length} unique candidate(s) from all sources`, "info");
+      return finalize(merged);
     }
 
-    // Tier 3: Semantic Scholar
-    if (engine === "auto" || engine === "semantic-scholar") {
-      try {
-        addLog(engine === "auto" ? "Falling back to Semantic Scholar..." : "Querying Semantic Scholar...", "info");
-        const semanticCandidates = await fetchSemanticScholar(cleanQuery, rawText);
+    // Specific engine selected: query only that source.
+    try {
+      addLog(`Querying ${engine}...`, "info");
+      let candidates: CitationCandidate[] = [];
+      if (engine === "crossref") candidates = await fetchCrossRef(cleanQuery, rawText);
+      else if (engine === "semantic-scholar") candidates = await fetchSemanticScholar(cleanQuery, rawText);
+      else if (engine === "pubmed") candidates = await fetchPubMed(cleanQuery, rawText);
+      else if (engine === "openalex") candidates = await fetchOpenAlex(cleanQuery, rawText);
 
-        if (semanticCandidates.length > 0) {
-          const bestScore = semanticCandidates[0].score;
-          const thresholdDecimal = threshold / 100;
-          addLog(
-            `Semantic Scholar found ${semanticCandidates.length} candidate(s), best: ${(semanticCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-            bestScore >= thresholdDecimal ? "success" : "warning"
-          );
-
-          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
-          return {
-            ...citation,
-            status: autoSelect !== null ? "resolved" : "unresolved",
-            candidates: semanticCandidates,
-            selectedCandidateIndex: autoSelect,
-          };
-        }
-      } catch (error) {
-        addLog(`Semantic Scholar error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
-      }
+      addLog(`${engine} found ${candidates.length} candidate(s)`, candidates.length > 0 ? "info" : "warning");
+      return finalize(candidates);
+    } catch (error) {
+      addLog(`${engine} error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
+      return { ...citation, status: "unresolved", candidates: [] };
     }
-
-    // PubMed
-    if (engine === "pubmed") {
-      try {
-        addLog("Querying PubMed...", "info");
-        const pubmedCandidates = await fetchPubMed(cleanQuery, rawText);
-
-        if (pubmedCandidates.length > 0) {
-          const bestScore = pubmedCandidates[0].score;
-          const thresholdDecimal = threshold / 100;
-          addLog(
-            `PubMed found ${pubmedCandidates.length} candidate(s), best: ${(pubmedCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-            bestScore >= thresholdDecimal ? "success" : "warning"
-          );
-
-          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
-          return {
-            ...citation,
-            status: autoSelect !== null ? "resolved" : "unresolved",
-            candidates: pubmedCandidates,
-            selectedCandidateIndex: autoSelect,
-          };
-        }
-      } catch (error) {
-        addLog(`PubMed error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
-      }
-    }
-
-    // OpenAlex
-    if (engine === "openalex") {
-      try {
-        addLog("Querying OpenAlex...", "info");
-        const openalexCandidates = await fetchOpenAlex(cleanQuery, rawText);
-
-        if (openalexCandidates.length > 0) {
-          const bestScore = openalexCandidates[0].score;
-          const thresholdDecimal = threshold / 100;
-          addLog(
-            `OpenAlex found ${openalexCandidates.length} candidate(s), best: ${(openalexCandidates[0].title || "Unknown title").substring(0, 40)}... (${(bestScore * 100).toFixed(0)}%)`,
-            bestScore >= thresholdDecimal ? "success" : "warning"
-          );
-
-          const autoSelect = bestScore >= thresholdDecimal ? 0 : null;
-          return {
-            ...citation,
-            status: autoSelect !== null ? "resolved" : "unresolved",
-            candidates: openalexCandidates,
-            selectedCandidateIndex: autoSelect,
-          };
-        }
-      } catch (error) {
-        addLog(`OpenAlex error: ${error instanceof Error ? error.message : "Unknown"}`, "error");
-      }
-    }
-
-    addLog(`No match found for citation`, "error");
-    return { ...citation, status: "unresolved", candidates: [] };
   };
 
   const handleExecute = async () => {
@@ -237,49 +199,54 @@ export default function CitationResolverContent() {
     setCitations(initialCitations);
     addLog(`Starting extraction for ${lines.length} citation(s)...`, "info");
 
-    const results: ProcessedCitation[] = [];
+    // Process several citations at once for speed, while keeping enough of a
+    // limit to stay within the public APIs' rate limits.
+    const CONCURRENCY = 3;
+    const queue = [...initialCitations];
+    let completed = 0;
 
-    for (let i = 0; i < initialCitations.length; i++) {
-      const citation = initialCitations[i];
-      setProgress({ current: i + 1, total: lines.length });
-
-      setCitations((prev) =>
-        prev.map((c) =>
-          c.id === citation.id ? { ...c, status: "processing" } : c
-        )
-      );
-
-      addLog(`Processing: "${citation.rawText.substring(0, 50)}..."`, "info");
-
-      try {
-        const processed = await processCitation(citation);
-        results.push(processed);
+    const worker = async () => {
+      while (queue.length > 0) {
+        const citation = queue.shift();
+        if (!citation) break;
 
         setCitations((prev) =>
-          prev.map((c) => (c.id === citation.id ? processed : c))
+          prev.map((c) =>
+            c.id === citation.id ? { ...c, status: "processing" } : c
+          )
         );
-      } catch (error) {
-        console.error("[v0] Error processing citation:", error);
-        addLog(`Error processing citation ${i + 1}: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
-        
-        // Mark as unresolved but continue with next citation
-        const failedCitation: ProcessedCitation = {
-          ...citation,
-          status: "unresolved",
-          candidates: [],
-        };
-        results.push(failedCitation);
-        
-        setCitations((prev) =>
-          prev.map((c) => (c.id === citation.id ? failedCitation : c))
-        );
-      }
 
-      // Small delay between requests to avoid rate limiting
-      if (i < initialCitations.length - 1) {
-        await new Promise((r) => setTimeout(r, 500));
+        addLog(`Processing: "${citation.rawText.substring(0, 50)}..."`, "info");
+
+        try {
+          const processed = await processCitation(citation);
+          setCitations((prev) =>
+            prev.map((c) => (c.id === citation.id ? processed : c))
+          );
+        } catch (error) {
+          console.error("[v0] Error processing citation:", error);
+          addLog(`Error processing citation: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+
+          const failedCitation: ProcessedCitation = {
+            ...citation,
+            status: "unresolved",
+            candidates: [],
+          };
+          setCitations((prev) =>
+            prev.map((c) => (c.id === citation.id ? failedCitation : c))
+          );
+        }
+
+        completed++;
+        setProgress({ current: completed, total: lines.length });
       }
-    }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, initialCitations.length) }, () =>
+        worker()
+      )
+    );
 
     addLog("Processing complete!", "success");
     setIsProcessing(false);
@@ -349,7 +316,8 @@ export default function CitationResolverContent() {
         );
       }
     },
-    [citations, addLog]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [citations, addLog, filterMissingMetadata, threshold, searchEngine]
   );
 
   const calculateStats = useCallback((): ProcessingStats => {
@@ -574,6 +542,24 @@ export default function CitationResolverContent() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Metadata filter option */}
+          <div className="mt-3 px-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={filterMissingMetadata}
+                onChange={(e) => setFilterMissingMetadata(e.target.checked)}
+                disabled={isProcessing}
+                className="h-4 w-4 rounded cursor-pointer
+                  accent-neutral-800 dark:accent-white
+                  disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                Hide suggestions missing author or year
+              </span>
+            </label>
           </div>
 
           <button

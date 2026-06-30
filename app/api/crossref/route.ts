@@ -10,11 +10,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const encoded = encodeURIComponent(query);
-    const url = `https://api.crossref.org/works?query.bibliographic=${encoded}&filter=type:journal-article&select=DOI,title,author,issued,container-title&rows=3`;
+    // Adding mailto puts the request in CrossRef's faster "polite pool".
+    const url = `https://api.crossref.org/works?query.bibliographic=${encoded}&filter=type:journal-article&select=DOI,title,author,issued,container-title&rows=3&mailto=contact@bulcite.app`;
 
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "CitationResolver/1.0 (mailto:contact@example.com)",
+        "User-Agent": "BulCite/1.0 (mailto:contact@bulcite.app)",
       },
     });
 
